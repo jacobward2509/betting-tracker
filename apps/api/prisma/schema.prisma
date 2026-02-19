@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Bet {
+  id              String    @id @default(uuid())
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fixture         String
+  selection       String
+  bookmaker       Bookmaker @default(Bet365)
+  stakeType       StakeType @default(NORMAL)
+  betType         String    @default("Player Prop")
+  playerPropMarket String?
+  stake           Decimal
+  odds            Decimal
+  potentialReturn Decimal
+  result          BetResult @default(OPEN)
+  cashOutValue    Decimal?
+  profit          Decimal?
+  placedAt        DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String    @default("User")
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  bets         Bet[]
+  sessions     Session[]
+  bookmakers   UserBookmaker[]
+  preferences  UserPreference?
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserBookmaker {
+  id        Int       @id @default(autoincrement())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookmaker Bookmaker
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, bookmaker])
+  @@index([userId])
+}
+
+model UserPreference {
+  id              Int       @id @default(autoincrement())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultBookmaker Bookmaker?
+  defaultBetType  String?
+  defaultStake    Decimal?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Bookmakers {
+  id         Int   @id @default(autoincrement())
+  bookmakers Bookmaker
+}
+
+model BetTypes {
+  id       Int    @id @default(autoincrement())
+  betTypes String @unique
+}
+
+model PlayerPropMarkets {
+  id      Int    @id @default(autoincrement())
+  markets String @unique
+}
+
+enum Bookmaker {
+  Bet365
+  Betfair
+  BetUK
+  Ladbrokes
+  PaddyPower  @map("Paddy Power")
+  SkyBet
+  WilliamHill @map("William Hill")
+}
+
+enum StakeType {
+  NORMAL
+  FREE
+}
+
+enum BetResult {
+  OPEN
+  WON
+  LOST
+  VOID
+}

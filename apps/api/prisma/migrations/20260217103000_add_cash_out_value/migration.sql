@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Bet"
+ADD COLUMN IF NOT EXISTS "cashOutValue" DECIMAL(65,30);
