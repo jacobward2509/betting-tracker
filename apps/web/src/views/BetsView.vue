@@ -8,7 +8,18 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 
 const bets = ref([]);
-const filters = ref({
+const FILTERS_STORAGE_KEY = "bets-table-filters";
+const TABLE_STATE_STORAGE_KEY = "bets-table-state";
+
+type BetsFilters = {
+  fixture: string;
+  date: string;
+  bookie: string;
+  stakeType: string;
+  result: string;
+};
+
+const defaultFilters = (): BetsFilters => ({
   fixture: "",
   date: "",
   bookie: "",
@@ -16,11 +27,38 @@ const filters = ref({
   result: "",
 });
 
+const sanitizeFilters = (value: unknown): BetsFilters => {
+  const source = (value || {}) as Partial<BetsFilters>;
+  return {
+    fixture: String(source.fixture || ""),
+    date: String(source.date || ""),
+    bookie: String(source.bookie || ""),
+    stakeType: String(source.stakeType || ""),
+    result: String(source.result || ""),
+  };
+};
+
+const loadSavedFilters = (): BetsFilters => {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return defaultFilters();
+    return sanitizeFilters(JSON.parse(raw));
+  } catch {
+    return defaultFilters();
+  }
+};
+
+const filters = ref<BetsFilters>(loadSavedFilters());
+
 // Modal visibility
 const showModal = ref(false);
 const showEditModal = ref(false);
 const showColumnsMenu = ref(false);
 const showDeleteModal = ref(false);
+const isApplyingBulkResult = ref(false);
+const selectedBetIds = ref<string[]>([]);
+const bulkResult = ref<"Open" | "Win" | "Loss" | "Cashed Out">("Open");
+const bulkCashOutValue = ref<number | null>(null);
 const editingBet = ref<Record<string, any> | null>(null);
 const deletingBet = ref<Record<string, any> | null>(null);
 const isDeleting = ref(false);
@@ -53,11 +91,74 @@ try {
 
 const authStore = useAuthStore();
 
+type PersistedTableState = {
+  sortKey: "date" | "stake" | "odds" | "result" | "profit" | null;
+  sortDirection: "asc" | "desc";
+  pageSize: number;
+  currentPage: number;
+};
+
+const validSortKeys = new Set(["date", "stake", "odds", "result", "profit"]);
+const validPageSizes = new Set([5, 10, 25, 50, 100]);
+
+const sanitizeTableState = (value: unknown): PersistedTableState => {
+  const source = (value || {}) as Partial<PersistedTableState>;
+  const rawSortKey = source.sortKey;
+  const nextSortKey =
+    rawSortKey === null || rawSortKey === undefined
+      ? null
+      : validSortKeys.has(String(rawSortKey))
+        ? (String(rawSortKey) as PersistedTableState["sortKey"])
+        : null;
+  const nextSortDirection = source.sortDirection === "desc" ? "desc" : "asc";
+  const parsedPageSize = Number(source.pageSize);
+  const nextPageSize = validPageSizes.has(parsedPageSize) ? parsedPageSize : 10;
+  const parsedCurrentPage = Number(source.currentPage);
+  const nextCurrentPage = Number.isInteger(parsedCurrentPage) && parsedCurrentPage > 0 ? parsedCurrentPage : 1;
+
+  return {
+    sortKey: nextSortKey,
+    sortDirection: nextSortDirection,
+    pageSize: nextPageSize,
+    currentPage: nextCurrentPage,
+  };
+};
+
+const loadSavedTableState = (): PersistedTableState => {
+  try {
+    const raw = localStorage.getItem(TABLE_STATE_STORAGE_KEY);
+    if (!raw) {
+      return {
+        sortKey: null,
+        sortDirection: "asc",
+        pageSize: 10,
+        currentPage: 1,
+      };
+    }
+    return sanitizeTableState(JSON.parse(raw));
+  } catch {
+    return {
+      sortKey: null,
+      sortDirection: "asc",
+      pageSize: 10,
+      currentPage: 1,
+    };
+  }
+};
+
+const savedTableState = loadSavedTableState();
+sortKey.value = savedTableState.sortKey;
+sortDirection.value = savedTableState.sortDirection;
+pageSize.value = savedTableState.pageSize;
+currentPage.value = savedTableState.currentPage;
+
 // Fetch bets
 const fetchBets = async () => {
   try {
     const res = await api.get("/api/bets");
     bets.value = res.data || [];
+    const existingIds = new Set((bets.value as Array<Record<string, any>>).map((bet) => String(bet.id)));
+    selectedBetIds.value = selectedBetIds.value.filter((id) => existingIds.has(id));
   } catch (error: any) {
     if (error?.response?.status === 401) {
       await authStore.logout();
@@ -90,7 +191,7 @@ const onBetUpdated = () => {
 };
 
 const onFiltersUpdate = (nextFilters: typeof filters.value) => {
-  filters.value = nextFilters;
+  filters.value = sanitizeFilters(nextFilters);
 };
 
 const openDeleteModal = (bet: Record<string, any>) => {
@@ -229,6 +330,19 @@ const formatProfit = (profit: unknown) => {
   return `£ ${value.toFixed(2)}`;
 };
 
+const selectedCount = computed(() => selectedBetIds.value.length);
+
+const isBetSelected = (id: string) => selectedBetIds.value.includes(String(id));
+
+const toggleBetSelection = (id: string) => {
+  const key = String(id);
+  if (selectedBetIds.value.includes(key)) {
+    selectedBetIds.value = selectedBetIds.value.filter((value) => value !== key);
+    return;
+  }
+  selectedBetIds.value = [...selectedBetIds.value, key];
+};
+
 const toggleSort = (key: "date" | "stake" | "odds" | "result" | "profit") => {
   if (sortKey.value === key) {
     sortDirection.value = sortDirection.value === "asc" ? "desc" : "asc";
@@ -358,7 +472,53 @@ const filteredBets = computed(() => {
 
 const sortedBets = computed(() => {
   const list = [...filteredBets.value] as Array<Record<string, any>>;
-  if (!sortKey.value) return list;
+  if (!sortKey.value) {
+    // Default table view:
+    // 1) newest day first
+    // 2) within a day, keep fixtures together
+    // 3) fixture groups with newest created bet first
+    // 4) within a fixture/day, newest created bet first
+    const latestCreatedAtByGroup = new Map<string, number>();
+    for (const bet of list) {
+      const day = String(bet.placedAt || "").slice(0, 10);
+      const fixture = String(bet.fixture || "");
+      const groupKey = `${day}||${fixture}`;
+      const createdAt = new Date(bet.createdAt || bet.placedAt || 0).getTime();
+      const previous = latestCreatedAtByGroup.get(groupKey) ?? Number.NEGATIVE_INFINITY;
+      if (createdAt > previous) {
+        latestCreatedAtByGroup.set(groupKey, createdAt);
+      }
+    }
+
+    list.sort((a, b) => {
+      const dayA = String(a.placedAt || "").slice(0, 10);
+      const dayB = String(b.placedAt || "").slice(0, 10);
+      const dayComparison = dayB.localeCompare(dayA);
+      if (dayComparison !== 0) return dayComparison;
+
+      const fixtureA = String(a.fixture || "");
+      const fixtureB = String(b.fixture || "");
+      const groupKeyA = `${dayA}||${fixtureA}`;
+      const groupKeyB = `${dayB}||${fixtureB}`;
+      const groupLatestA = latestCreatedAtByGroup.get(groupKeyA) ?? Number.NEGATIVE_INFINITY;
+      const groupLatestB = latestCreatedAtByGroup.get(groupKeyB) ?? Number.NEGATIVE_INFINITY;
+      if (groupLatestA !== groupLatestB) return groupLatestB - groupLatestA;
+
+      const fixtureComparison = fixtureA.localeCompare(fixtureB, undefined, {
+        sensitivity: "base",
+      });
+      if (fixtureComparison !== 0) return fixtureComparison;
+
+      const createdA = new Date(a.createdAt || a.placedAt || 0).getTime();
+      const createdB = new Date(b.createdAt || b.placedAt || 0).getTime();
+      if (createdA !== createdB) return createdB - createdA;
+
+      // Final deterministic fallback
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
+
+    return list;
+  }
 
   list.sort((a, b) => {
     let comparison = 0;
@@ -390,6 +550,65 @@ const paginatedBets = computed(() => {
   return sortedBets.value.slice(start, start + pageSize.value);
 });
 
+const allPageSelected = computed(() => {
+  if (!paginatedBets.value.length) return false;
+  return paginatedBets.value.every((bet) => isBetSelected(String(bet.id)));
+});
+
+const somePageSelected = computed(() => {
+  if (!paginatedBets.value.length) return false;
+  return paginatedBets.value.some((bet) => isBetSelected(String(bet.id)));
+});
+
+const toggleSelectPage = () => {
+  const pageIds = paginatedBets.value.map((bet) => String(bet.id));
+  if (!pageIds.length) return;
+
+  if (allPageSelected.value) {
+    const pageSet = new Set(pageIds);
+    selectedBetIds.value = selectedBetIds.value.filter((id) => !pageSet.has(id));
+    return;
+  }
+
+  const merged = new Set(selectedBetIds.value);
+  pageIds.forEach((id) => merged.add(id));
+  selectedBetIds.value = Array.from(merged);
+};
+
+const clearBulkSelection = () => {
+  selectedBetIds.value = [];
+};
+
+const resultLabelToApi: Record<string, string> = {
+  Open: "OPEN",
+  Win: "WON",
+  Loss: "LOST",
+  "Cashed Out": "VOID",
+};
+
+const applyBulkResult = async () => {
+  if (!selectedBetIds.value.length || isApplyingBulkResult.value) return;
+  if (bulkResult.value === "Cashed Out" && (bulkCashOutValue.value == null || bulkCashOutValue.value < 0)) {
+    alert("Please enter a valid Cash Out value for Cashed Out.");
+    return;
+  }
+
+  try {
+    isApplyingBulkResult.value = true;
+    await api.patch("/api/bets/bulk-result", {
+      ids: selectedBetIds.value,
+      result: resultLabelToApi[bulkResult.value],
+      cashOutValue: bulkResult.value === "Cashed Out" ? Number(bulkCashOutValue.value) : null,
+    });
+    await fetchBets();
+    clearBulkSelection();
+  } catch (error: any) {
+    alert(error?.response?.data?.error || "Failed to apply bulk result.");
+  } finally {
+    isApplyingBulkResult.value = false;
+  }
+};
+
 const goToFirstPage = () => {
   currentPage.value = 1;
 };
@@ -410,6 +629,12 @@ watch([pageSize, totalPages], () => {
   if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
 });
 
+watch(bulkResult, (value) => {
+  if (value !== "Cashed Out") {
+    bulkCashOutValue.value = null;
+  }
+});
+
 watch(
   () => [
     filters.value.fixture,
@@ -422,6 +647,39 @@ watch(
   ],
   () => {
     currentPage.value = 1;
+  },
+);
+
+watch(
+  filters,
+  (next) => {
+    try {
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(sanitizeFilters(next)));
+    } catch {
+      // ignore localStorage write errors
+    }
+  },
+  { deep: true },
+);
+
+watch(
+  [sortKey, sortDirection, pageSize, currentPage],
+  () => {
+    try {
+      localStorage.setItem(
+        TABLE_STATE_STORAGE_KEY,
+        JSON.stringify(
+          sanitizeTableState({
+            sortKey: sortKey.value,
+            sortDirection: sortDirection.value,
+            pageSize: pageSize.value,
+            currentPage: currentPage.value,
+          }),
+        ),
+      );
+    } catch {
+      // ignore localStorage write errors
+    }
   },
 );
 
@@ -535,9 +793,60 @@ const columnOptions: Array<{
     <div
       class="relative overflow-x-auto shadow-sm rounded-lg border border-gray-200 dark:border-gray-800"
     >
+      <div
+        v-if="selectedCount > 0"
+        class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-blue-200 bg-blue-50 px-3 py-2 text-sm dark:border-blue-900 dark:bg-blue-950/40"
+      >
+        <span class="font-medium text-blue-800 dark:text-blue-200">
+          {{ selectedCount }} selected
+        </span>
+        <span class="text-xs text-blue-700 dark:text-blue-300">
+          Select the rows you want to update the result for, then click Apply.
+        </span>
+        <select
+          v-model="bulkResult"
+          class="rounded border border-blue-200 bg-white px-2 py-1 text-sm dark:border-blue-800 dark:bg-gray-900 dark:text-gray-100"
+        >
+          <option>Open</option>
+          <option>Win</option>
+          <option>Loss</option>
+          <option>Cashed Out</option>
+        </select>
+        <input
+          v-if="bulkResult === 'Cashed Out'"
+          v-model.number="bulkCashOutValue"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="Cash Out Value"
+          class="w-36 rounded border border-blue-200 bg-white px-2 py-1 text-sm dark:border-blue-800 dark:bg-gray-900 dark:text-gray-100"
+        />
+        <button
+          @click="applyBulkResult"
+          :disabled="isApplyingBulkResult"
+          class="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {{ isApplyingBulkResult ? "Applying..." : "Apply" }}
+        </button>
+        <button
+          @click="clearBulkSelection"
+          class="bg-red-600 hover:bg-red-700 text-white border border-gray-300 px-3 py-1 text-xs font-semibold rounded-md dark:border-gray-700"
+        >
+          Clear
+        </button>
+      </div>
       <table class="w-full text-sm text-center text-gray-700 dark:text-gray-200">
         <thead class="bg-gray-100 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
           <tr>
+            <th class="px-4 py-3 font-medium">
+              <input
+                type="checkbox"
+                :checked="allPageSelected"
+                :indeterminate.prop="somePageSelected && !allPageSelected"
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                @change="toggleSelectPage"
+              />
+            </th>
             <th v-if="visibleColumns.date" class="px-6 py-3 font-medium">
               <button @click="toggleSort('date')" class="inline-flex items-center gap-1">
                 Date
@@ -581,6 +890,14 @@ const columnOptions: Array<{
             :key="bet.id"
             class="odd:bg-white even:bg-gray-50 border-b border-gray-200 font-medium text-gray-900 whitespace-nowrap dark:odd:bg-gray-900 dark:even:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
           >
+            <td class="px-4 py-4">
+              <input
+                type="checkbox"
+                :checked="isBetSelected(String(bet.id))"
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                @change="toggleBetSelection(String(bet.id))"
+              />
+            </td>
             <td v-if="visibleColumns.date" class="px-6 py-4">
               {{ new Date(bet.placedAt).toLocaleDateString() }}
             </td>

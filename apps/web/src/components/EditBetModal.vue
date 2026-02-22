@@ -23,46 +23,6 @@
             />
           </div>
 
-          <div v-if="betType !== 'Accumulator'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
-            <input
-              v-model="fixture"
-              type="text"
-              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              required
-              data-test-id="edit-input-fixture"
-            />
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bookmaker</label>
-              <select
-                v-model="bookie"
-                class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                required
-              >
-                <option disabled value="">Select bookie</option>
-                <option v-for="b in bookmakers" :key="b.id" :value="b.bookmakers">
-                  {{ b.bookmakers }}
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Stake Type</label>
-              <select
-                v-model="stakeType"
-                class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                required
-              >
-                <option disabled value="">Select stake type</option>
-                <option>Normal</option>
-                <option>Free</option>
-              </select>
-            </div>
-          </div>
-
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
             <select
@@ -78,14 +38,17 @@
           </div>
 
           <div v-if="betType === 'FT Result'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Team to Win</label>
-            <input
-              v-model="teamToWin"
-              type="text"
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">FT Result</label>
+            <select
+              v-model="ftResultOutcome"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               required
-              data-test-id="edit-input-team-to-win"
-            />
+              data-test-id="edit-input-ft-result-outcome"
+            >
+              <option>Home Win</option>
+              <option>Draw</option>
+              <option>Away Win</option>
+            </select>
           </div>
 
           <div v-if="betType === 'Other'">
@@ -104,9 +67,13 @@
             <input
               v-model="player"
               type="text"
+              list="edit-player-suggestions"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               required
             />
+            <datalist id="edit-player-suggestions">
+              <option v-for="name in filteredPlayerSuggestions" :key="`edit-player-${name}`" :value="name" />
+            </datalist>
           </div>
 
           <div v-if="betType === 'Player Prop'" class="grid gap-3 sm:grid-cols-2">
@@ -144,6 +111,66 @@
                   class="block w-16 border rounded px-3 py-2 bg-gray-100 text-gray-700 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-200"
                 />
               </div>
+            </div>
+          </div>
+
+          <div v-if="betType !== 'Accumulator'">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
+            <div class="mt-1 flex items-center gap-2">
+              <input
+                v-model="homeTeam"
+                type="text"
+                placeholder="Home Team"
+                list="edit-home-team-suggestions"
+                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+                data-test-id="edit-input-home-team"
+              />
+              <span class="text-sm font-semibold text-gray-600 dark:text-gray-300">vs</span>
+              <input
+                v-model="awayTeam"
+                type="text"
+                placeholder="Away Team"
+                list="edit-away-team-suggestions"
+                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+                data-test-id="edit-input-away-team"
+              />
+            </div>
+            <datalist id="edit-home-team-suggestions">
+              <option v-for="team in filteredHomeTeamSuggestions" :key="`edit-home-team-${team}`" :value="team" />
+            </datalist>
+            <datalist id="edit-away-team-suggestions">
+              <option v-for="team in filteredAwayTeamSuggestions" :key="`edit-away-team-${team}`" :value="team" />
+            </datalist>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bookmaker</label>
+              <select
+                v-model="bookie"
+                class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+              >
+                <option disabled value="">Select bookie</option>
+                <option v-for="b in bookmakers" :key="b.id" :value="b.bookmakers">
+                  {{ b.bookmakers }}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Stake Type</label>
+              <select
+                v-model="stakeType"
+                class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+              >
+                <option disabled value="">Select stake type</option>
+                <option>Normal</option>
+                <option>Free</option>
+              </select>
             </div>
           </div>
 
@@ -244,7 +271,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import api from "@/lib/api";
 import {
   decimalToFractionalOdds,
@@ -267,6 +294,9 @@ const isSaving = ref(false);
 const bookmakers = ref<{ id: string; bookmakers: string }[]>([]);
 const betTypes = ref<{ id: number | string; betTypes: string }[]>([]);
 const playerPropMarkets = ref<{ id: number; markets: string }[]>([]);
+const teamSuggestions = ref<string[]>([]);
+const playerSuggestions = ref<string[]>([]);
+let playerSuggestionFetchTimer: ReturnType<typeof setTimeout> | null = null;
 const fallbackBetTypes = ["Accumulator", "Bet Builder", "Player Prop", "Superboost", "FT Result", "Other"];
 
 const date = ref(new Date().toISOString().slice(0, 10));
@@ -274,7 +304,9 @@ const fixture = ref("");
 const bookie = ref("");
 const stakeType = ref("Normal");
 const betType = ref("Player Prop");
-const teamToWin = ref("");
+const ftResultOutcome = ref<"Home Win" | "Draw" | "Away Win">("Home Win");
+const homeTeam = ref("");
+const awayTeam = ref("");
 const otherBetType = ref("");
 const player = ref("");
 const playerPropMarket = ref("");
@@ -361,7 +393,11 @@ const getGeneratedDescription = () => {
   if (betType.value === "Accumulator") return "Accumulator";
   if (betType.value === "Bet Builder") return "Bet Builder";
   if (betType.value === "Superboost") return "Superboost";
-  if (betType.value === "FT Result") return `${teamToWin.value.trim()} to Win`;
+  if (betType.value === "FT Result") {
+    if (ftResultOutcome.value === "Draw") return "Draw";
+    if (ftResultOutcome.value === "Home Win") return `${homeTeam.value.trim()} FT Result`;
+    return `${awayTeam.value.trim()} FT Result`;
+  }
   if (betType.value === "Other") return otherBetType.value.trim();
 
   const playerName = player.value.trim();
@@ -406,6 +442,66 @@ const fetchPlayerPropMarkets = async () => {
   }
 };
 
+const fetchTeamSuggestions = async () => {
+  try {
+    const res = await api.get("/api/team-suggestions");
+    teamSuggestions.value = Array.isArray(res.data) ? res.data.map((item: unknown) => String(item)) : [];
+  } catch (error) {
+    console.error("Failed to fetch team suggestions:", error);
+  }
+};
+
+const fetchPlayerSuggestions = async (query?: string) => {
+  try {
+    const res = await api.get("/api/player-suggestions", {
+      params: query ? { q: query } : undefined,
+    });
+    playerSuggestions.value = Array.isArray(res.data) ? res.data.map((item: unknown) => String(item)) : [];
+  } catch (error) {
+    console.error("Failed to fetch player suggestions:", error);
+  }
+};
+
+const buildFilteredTeamSuggestions = (term: string) => {
+  const normalized = String(term || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (!normalized) return [];
+  return teamSuggestions.value
+    .filter((team) =>
+      team
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .includes(normalized),
+    )
+    .slice(0, 12);
+};
+
+const filteredHomeTeamSuggestions = computed(() => buildFilteredTeamSuggestions(homeTeam.value));
+const filteredAwayTeamSuggestions = computed(() => buildFilteredTeamSuggestions(awayTeam.value));
+const filteredPlayerSuggestions = computed(() => {
+  const normalized = String(player.value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (!normalized) return [];
+
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  return playerSuggestions.value
+    .filter((name) => {
+      const normalizedName = name
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      return tokens.every((token) => normalizedName.includes(token));
+    })
+    .slice(0, 12);
+});
+
 const hydrateFromBet = (bet: Record<string, any> | null) => {
   if (!bet) return;
 
@@ -423,10 +519,33 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
     player.value = "";
     playerPropLineWhole.value = 0;
   }
-  if (betType.value === "FT Result") {
-    teamToWin.value = String(bet.selection || "").replace(/\s+to\s+Win$/i, "").trim();
+  if (betType.value !== "Accumulator") {
+    const fixtureParts = String(bet.fixture || "").split(/\s+vs\s+/i);
+    homeTeam.value = String(fixtureParts[0] || "").trim();
+    awayTeam.value = String(fixtureParts[1] || "").trim();
   } else {
-    teamToWin.value = "";
+    homeTeam.value = "";
+    awayTeam.value = "";
+  }
+  if (betType.value === "FT Result") {
+    const selection = String(bet.selection || "").trim();
+    if (/^draw$/i.test(selection)) {
+      ftResultOutcome.value = "Draw";
+    } else if (
+      homeTeam.value &&
+      selection.localeCompare(`${homeTeam.value} FT Result`, undefined, { sensitivity: "accent" }) === 0
+    ) {
+      ftResultOutcome.value = "Home Win";
+    } else if (
+      awayTeam.value &&
+      selection.localeCompare(`${awayTeam.value} FT Result`, undefined, { sensitivity: "accent" }) === 0
+    ) {
+      ftResultOutcome.value = "Away Win";
+    } else {
+      ftResultOutcome.value = "Home Win";
+    }
+  } else {
+    ftResultOutcome.value = "Home Win";
   }
   if (betType.value === "Other") {
     otherBetType.value = String(bet.selection || "").trim();
@@ -479,16 +598,12 @@ const submitEdit = async () => {
     alert("Please enter a valid Cash Out value.");
     return;
   }
-  if (betType.value !== "Accumulator" && !fixture.value.trim()) {
-    alert("Fixture is required.");
+  if (betType.value !== "Accumulator" && (!homeTeam.value.trim() || !awayTeam.value.trim())) {
+    alert("Home Team and Away Team are required.");
     return;
   }
   if (betType.value === "Player Prop" && !player.value.trim()) {
     alert("Player is required for Player Prop.");
-    return;
-  }
-  if (betType.value === "FT Result" && !teamToWin.value.trim()) {
-    alert("Team to Win is required for FT Result.");
     return;
   }
   if (betType.value === "Other" && !otherBetType.value.trim()) {
@@ -502,7 +617,10 @@ const submitEdit = async () => {
     isSaving.value = true;
 
     const payload = {
-      fixture: betType.value === "Accumulator" ? "Accumulator" : fixture.value,
+      fixture:
+        betType.value === "Accumulator"
+          ? "Accumulator"
+          : `${homeTeam.value.trim()} vs ${awayTeam.value.trim()}`,
       selection: generatedDescription,
       bookmaker: bookie.value,
       stakeType: stakeTypeMapping[stakeType.value] || "NORMAL",
@@ -534,6 +652,7 @@ onMounted(() => {
   fetchBookmakers();
   fetchBetTypes();
   fetchPlayerPropMarkets();
+  fetchTeamSuggestions();
 });
 
 watch(
@@ -563,11 +682,37 @@ watch(betType, (value) => {
     playerPropLineWhole.value = 0;
   }
   if (value !== "FT Result") {
-    teamToWin.value = "";
+    ftResultOutcome.value = "Home Win";
+  }
+  if (value === "Accumulator") {
+    homeTeam.value = "";
+    awayTeam.value = "";
   }
   if (value !== "Other") {
     otherBetType.value = "";
   }
+  if (value !== "Player Prop") {
+    playerSuggestions.value = [];
+  }
+});
+
+watch(player, (value) => {
+  const query = String(value || "").trim();
+  if (!query || betType.value !== "Player Prop") {
+    playerSuggestions.value = [];
+    if (playerSuggestionFetchTimer) {
+      clearTimeout(playerSuggestionFetchTimer);
+      playerSuggestionFetchTimer = null;
+    }
+    return;
+  }
+
+  if (playerSuggestionFetchTimer) {
+    clearTimeout(playerSuggestionFetchTimer);
+  }
+  playerSuggestionFetchTimer = setTimeout(() => {
+    fetchPlayerSuggestions(query);
+  }, 150);
 });
 
 watch(

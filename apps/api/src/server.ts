@@ -144,6 +144,56 @@ const sanitizeUniqueStrings = (items: unknown[]): string[] => {
   return values;
 };
 
+const parseFixtureTeams = (fixture: unknown): string[] => {
+  const raw = String(fixture || '').trim();
+  if (!raw) return [];
+  const parts = raw
+    .split(/\s+vs\s+/i)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return [];
+  return [parts[0], parts[1]];
+};
+
+const parsePlayerFromSelection = (selection: unknown, market: unknown): string => {
+  const text = String(selection || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  const normalizedMarket = String(market || '').trim();
+  if (!text) return '';
+
+  if (normalizedMarket) {
+    const idx = text.toLowerCase().indexOf(normalizedMarket.toLowerCase());
+    if (idx > 0) {
+      return text.slice(0, idx).trim();
+    }
+  }
+
+  const legacyMatch = text.match(/^(.*?)\s+[OU]\s*(\d+(?:\.\d+)?)\s+(.+)$/i);
+  if (legacyMatch) {
+    return String(legacyMatch[1] || '').trim();
+  }
+
+  // Heuristic fallback for legacy/imported text such as:
+  // "Joelinton to be carded", "Joelinton carded", "Joelinton AGS", "Joelinton O0.5 FW"
+  const fallback = text
+    .replace(/\b[OU]\s*\d+(?:\.\d+)?\b/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?\b/g, ' ')
+    .replace(
+      /\b(shots?|sot|fouls?\s+won|fouls?\s+committed|tackles?|to\s+be\s+carded|carded|ags|fw|fc)\b.*$/i,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (fallback) return fallback;
+
+  // Final fallback: allow single-token player names.
+  const firstToken = text.split(/\s+/).filter(Boolean)[0] || '';
+  if (firstToken) return firstToken;
+
+  return '';
+};
+
 type UserConfigOverrides = {
   enabledBookmakers?: string[] | null;
   defaultBookmaker?: string | null;
@@ -644,6 +694,97 @@ app.get('/api/bets', requireAuth, async (req: AuthenticatedRequest, res) => {
   res.json(bets);
 });
 
+app.get('/api/team-suggestions', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const query = String(req.query.q || '')
+    .trim()
+    .toLowerCase();
+  const rows = await prisma.bet.findMany({
+    where: {
+      userId: req.user?.id,
+      fixture: {
+        contains: 'vs',
+        mode: 'insensitive',
+      },
+    },
+    select: {
+      fixture: true,
+    },
+    orderBy: {
+      placedAt: 'desc',
+    },
+    take: 5000,
+  });
+
+  const stats = new Map<string, { name: string; count: number }>();
+  for (const row of rows) {
+    const teams = parseFixtureTeams(row.fixture);
+    for (const team of teams) {
+      const key = team.toLowerCase();
+      const existing = stats.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        stats.set(key, { name: team, count: 1 });
+      }
+    }
+  }
+
+  const suggestions = Array.from(stats.values())
+    .filter((item) => !query || item.name.toLowerCase().includes(query))
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 100)
+    .map((item) => item.name);
+
+  return res.json(suggestions);
+});
+
+app.get('/api/player-suggestions', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const query = String(req.query.q || '')
+    .trim()
+    .toLowerCase();
+  const rows = await prisma.bet.findMany({
+    where: {
+      userId: req.user?.id,
+      betType: 'Player Prop',
+    },
+    select: {
+      selection: true,
+      playerPropMarket: true,
+    },
+    orderBy: {
+      placedAt: 'desc',
+    },
+    take: 5000,
+  });
+
+  const stats = new Map<string, { name: string; count: number }>();
+  for (const row of rows) {
+    const player = parsePlayerFromSelection(row.selection, row.playerPropMarket);
+    if (!player) continue;
+    const key = player.toLowerCase();
+    const existing = stats.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      stats.set(key, { name: player, count: 1 });
+    }
+  }
+
+  const suggestions = Array.from(stats.values())
+    .filter((item) => !query || item.name.toLowerCase().includes(query))
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 100)
+    .map((item) => item.name);
+
+  return res.json(suggestions);
+});
+
 app.post('/api/bets', requireAuth, async (req: AuthenticatedRequest, res) => {
   const data: Record<string, unknown> = { ...req.body };
   data.result = normalizeResultValue(data.result);
@@ -716,6 +857,56 @@ app.put('/api/bets/:id', requireAuth, async (req: AuthenticatedRequest, res) => 
     data: data as any,
   });
   res.json(bet);
+});
+
+app.patch('/api/bets/bulk-result', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const ids = Array.isArray(req.body?.ids) ? sanitizeUniqueStrings(req.body.ids) : [];
+  if (!ids.length) {
+    return res.status(400).json({ error: 'At least one bet id is required.' });
+  }
+
+  const normalizedResult = normalizeResultValue(req.body?.result);
+  const normalizedCashOutValue =
+    normalizedResult === 'VOID' ? toNumberOrNull(req.body?.cashOutValue) : null;
+
+  if (normalizedResult === 'VOID' && (normalizedCashOutValue === null || normalizedCashOutValue < 0)) {
+    return res.status(400).json({ error: 'Cash Out value is required for Cashed Out result.' });
+  }
+
+  const existingBets = await prisma.bet.findMany({
+    where: {
+      id: { in: ids },
+      userId: req.user?.id,
+    },
+  });
+
+  if (!existingBets.length) {
+    return res.status(404).json({ error: 'No matching bets found.' });
+  }
+
+  await prisma.$transaction(
+    existingBets.map((bet) => {
+      const payload = {
+        ...bet,
+        result: normalizedResult,
+        cashOutValue: normalizedCashOutValue,
+      };
+      const profit = calculateProfit(payload);
+      return prisma.bet.update({
+        where: { id: bet.id },
+        data: {
+          result: normalizedResult,
+          cashOutValue: normalizedCashOutValue,
+          profit,
+        } as any,
+      });
+    }),
+  );
+
+  return res.json({
+    updatedCount: existingBets.length,
+    ids: existingBets.map((bet) => bet.id),
+  });
 });
 
 app.delete('/api/bets/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
