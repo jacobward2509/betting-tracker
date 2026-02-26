@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import api, { setAuthToken } from "@/lib/api";
+import { useSuggestionsStore } from "@/stores/suggestions";
 
 type AuthUser = {
   id: string;
@@ -18,6 +19,7 @@ type SignupPreferences = {
 const TOKEN_STORAGE_KEY = "auth-token";
 
 export const useAuthStore = defineStore("auth", () => {
+  const suggestionsStore = useSuggestionsStore();
   const token = ref<string | null>(null);
   const user = ref<AuthUser | null>(null);
   const initialized = ref(false);
@@ -41,6 +43,7 @@ export const useAuthStore = defineStore("auth", () => {
   const clearAuth = () => {
     applyToken(null);
     user.value = null;
+    suggestionsStore.clear();
   };
 
   const loadFromStorage = () => {
@@ -71,6 +74,9 @@ export const useAuthStore = defineStore("auth", () => {
     initialized.value = true;
     loadFromStorage();
     await fetchMe();
+    if (user.value?.id) {
+      void suggestionsStore.preloadSuggestions(user.value.id);
+    }
   };
 
   const signup = async (
@@ -86,12 +92,18 @@ export const useAuthStore = defineStore("auth", () => {
     const res = await api.post("/api/auth/signup", payload);
     applyToken(String(res.data?.token || ""));
     user.value = res.data?.user || null;
+    if (user.value?.id) {
+      void suggestionsStore.preloadSuggestions(user.value.id, true);
+    }
   };
 
   const login = async (email: string, password: string) => {
     const res = await api.post("/api/auth/login", { email, password });
     applyToken(String(res.data?.token || ""));
     user.value = res.data?.user || null;
+    if (user.value?.id) {
+      void suggestionsStore.preloadSuggestions(user.value.id, true);
+    }
   };
 
   const logout = async () => {

@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 
 type Filters = {
+  season: string;
   fixture: string;
   date: string;
   bookie: string;
@@ -11,6 +12,7 @@ type Filters = {
 
 const props = defineProps<{
   filters: Filters;
+  seasonOptions: string[];
   bookieOptions: string[];
   stakeTypeOptions: string[];
   resultOptions: string[];
@@ -43,6 +45,7 @@ const updateFilter = (key: keyof Filters, value: string) => {
 
 const clearFilters = () => {
   emit("update:filters", {
+    season: "",
     fixture: "",
     date: "",
     bookie: "",
@@ -81,7 +84,22 @@ const clearFilters = () => {
     </div>
 
     <div v-if="isExpanded" class="border-t border-gray-100 p-3 pt-4 dark:border-gray-800">
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div>
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >Season</label
+          >
+          <select
+            :value="filters.season"
+            @change="updateFilter('season', ($event.target as HTMLSelectElement).value)"
+            class="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          >
+            <option v-for="option in seasonOptions" :key="option" :value="option">
+              {{ option }}
+            </option>
+          </select>
+        </div>
+
         <div>
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400"
             >Fixture</label

@@ -1,15 +1,32 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import api from "@/lib/api";
 import { decimalToFractionalOdds, type OddsFormat } from "@/utils/odds";
+import {
+  SELECTED_SEASON_STORAGE_KEY,
+  getCurrentSeasonKey,
+  getSeasonKeyFromDate,
+  getSeasonLabel,
+} from "@/utils/season";
 
 type Bet = Record<string, any>;
 
 const bets = ref<Bet[]>([]);
 const isLoading = ref(true);
 const oddsFormat = ref<OddsFormat>("decimal");
+const selectedSeason = ref(getSeasonLabel(getCurrentSeasonKey()));
 const isDailyExpanded = ref(false);
 const DAILY_PREVIEW_ROWS = 10;
+
+const getSeasonKeyFromLabel = (label: string) => {
+  const trimmed = String(label || "").trim();
+  const keyMatch = trimmed.match(/^(\d{4})-(\d{4})$/);
+  if (keyMatch) return `${keyMatch[1]}-${keyMatch[2]}`;
+  const labelMatch = trimmed.match(/^(\d{4})\s*\/\s*(\d{2})$/);
+  if (!labelMatch) return "";
+  const startYear = Number(labelMatch[1]);
+  return `${startYear}-${startYear + 1}`;
+};
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value);
@@ -85,19 +102,36 @@ const onOddsPreferenceUpdated = () => {
   syncOddsPreference();
 };
 
+const seasonOptions = computed(() => {
+  const keys = new Set<string>([getCurrentSeasonKey()]);
+  for (const bet of bets.value) {
+    const seasonKey = getSeasonKeyFromDate(String(bet.placedAt || ""));
+    if (seasonKey) keys.add(seasonKey);
+  }
+  return Array.from(keys)
+    .sort((a, b) => b.localeCompare(a))
+    .map((key) => getSeasonLabel(key));
+});
+
+const scopedBets = computed(() => {
+  const seasonKey = getSeasonKeyFromLabel(selectedSeason.value);
+  if (!seasonKey) return bets.value;
+  return bets.value.filter((bet) => getSeasonKeyFromDate(String(bet.placedAt || "")) === seasonKey);
+});
+
 const overall = computed(() => {
-  const betsCount = bets.value.length;
-  const wins = bets.value.filter((bet) => {
+  const betsCount = scopedBets.value.length;
+  const wins = scopedBets.value.filter((bet) => {
     const result = normalizeResult(bet.result);
     return result === "WON" || result === "WIN" || result === "VOID" || result === "CASHED_OUT";
   }).length;
 
-  const totalStake = bets.value.reduce((sum, bet) => sum + getStakeForTotals(bet), 0);
-  const totalReturns = bets.value.reduce((sum, bet) => sum + getRealizedReturn(bet), 0);
-  const totalProfit = bets.value.reduce((sum, bet) => sum + getProfit(bet), 0);
+  const totalStake = scopedBets.value.reduce((sum, bet) => sum + getStakeForTotals(bet), 0);
+  const totalReturns = scopedBets.value.reduce((sum, bet) => sum + getRealizedReturn(bet), 0);
+  const totalProfit = scopedBets.value.reduce((sum, bet) => sum + getProfit(bet), 0);
   const averageStake = betsCount ? totalStake / betsCount : 0;
   const averageOdds = betsCount
-    ? bets.value.reduce((sum, bet) => sum + toNumber(bet.odds), 0) / betsCount
+    ? scopedBets.value.reduce((sum, bet) => sum + toNumber(bet.odds), 0) / betsCount
     : 0;
   const roi = totalStake > 0 ? (totalProfit / totalStake) * 100 : 0;
 
@@ -127,7 +161,7 @@ const monthlyRows = computed(() => {
     }
   >();
 
-  for (const bet of bets.value) {
+  for (const bet of scopedBets.value) {
     const date = new Date(bet.placedAt);
     const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
     const label = date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
@@ -170,7 +204,7 @@ const dailyRows = computed(() => {
     }
   >();
 
-  for (const bet of bets.value) {
+  for (const bet of scopedBets.value) {
     const date = String(bet.placedAt || "").slice(0, 10);
     const current = map.get(date) || {
       date,
@@ -223,7 +257,7 @@ const bookmakerRows = computed(() => {
     }
   >();
 
-  for (const bet of bets.value) {
+  for (const bet of scopedBets.value) {
     const bookmaker = String(bet.bookmaker || "-");
     const current = map.get(bookmaker) || {
       bookmaker,
@@ -250,6 +284,15 @@ const bookmakerRows = computed(() => {
 });
 
 onMounted(async () => {
+  try {
+    const storedSeason = localStorage.getItem(SELECTED_SEASON_STORAGE_KEY);
+    if (storedSeason) {
+      selectedSeason.value = String(storedSeason);
+    }
+  } catch {
+    selectedSeason.value = getSeasonLabel(getCurrentSeasonKey());
+  }
+
   syncOddsPreference();
   window.addEventListener("odds-format-updated", onOddsPreferenceUpdated);
   window.addEventListener("storage", onOddsPreferenceUpdated);
@@ -268,15 +311,37 @@ onBeforeUnmount(() => {
   window.removeEventListener("odds-format-updated", onOddsPreferenceUpdated);
   window.removeEventListener("storage", onOddsPreferenceUpdated);
 });
+
+watch(selectedSeason, (season) => {
+  try {
+    localStorage.setItem(SELECTED_SEASON_STORAGE_KEY, season);
+  } catch {
+    // ignore localStorage write errors
+  }
+});
 </script>
 
 <template>
   <div class="p-4 space-y-5">
     <div v-if="isLoading" class="text-sm text-gray-600 dark:text-gray-400">Loading stats...</div>
+    <div class="flex justify-end">
+      <div class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <label for="stats-season">Season</label>
+        <select
+          id="stats-season"
+          v-model="selectedSeason"
+          class="border border-gray-300 rounded-md px-2 py-1 bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        >
+          <option v-for="season in seasonOptions" :key="season" :value="season">
+            {{ season }}
+          </option>
+        </select>
+      </div>
+    </div>
 
     <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Overall</h2>
-      <div class="mt-3 overflow-x-auto">
+      <div class="mt-3 hidden overflow-x-auto md:block">
         <table class="w-full whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">
           <thead class="border-b border-gray-200 dark:border-gray-700">
             <tr>
@@ -310,11 +375,53 @@ onBeforeUnmount(() => {
           </tbody>
         </table>
       </div>
+      <div class="mt-3 md:hidden">
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="rounded bg-gray-50 p-2 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">No. of Bets</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">{{ overall.betsCount }}</p>
+          </div>
+          <div class="rounded bg-gray-50 p-2 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">No. of Wins</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">{{ overall.wins }}</p>
+          </div>
+          <div class="rounded bg-gray-50 p-2 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">Win Ratio</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">{{ overall.winRatio }}</p>
+          </div>
+          <div class="rounded bg-gray-50 p-2 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">Average Odds</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">{{ displayOdds(overall.averageOdds) }}</p>
+          </div>
+          <div class="rounded bg-gray-50 p-2 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">Total Stake</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(overall.totalStake) }}</p>
+          </div>
+          <div class="rounded bg-gray-50 p-2 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">Total Returns</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(overall.totalReturns) }}</p>
+          </div>
+          <div class="rounded bg-gray-50 p-2 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">Average Stake</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(overall.averageStake) }}</p>
+          </div>
+          <div class="rounded bg-gray-50 p-2 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">Total ROI</p>
+            <p class="font-semibold" :class="signedClass(overall.roi)">{{ formatRoi(overall.roi) }}</p>
+          </div>
+        </div>
+        <div class="mt-2 rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">
+          <p class="text-gray-500 dark:text-gray-400">Total P/L</p>
+          <p class="font-semibold" :class="signedClass(overall.totalProfit)">
+            {{ formatCurrency(overall.totalProfit) }}
+          </p>
+        </div>
+      </div>
     </section>
 
     <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Monthly</h2>
-      <div class="mt-3 overflow-x-auto">
+      <div class="mt-3 hidden overflow-x-auto md:block">
         <table class="w-full whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">
           <thead class="border-b border-gray-200 dark:border-gray-700">
             <tr>
@@ -344,11 +451,46 @@ onBeforeUnmount(() => {
           </tbody>
         </table>
       </div>
+      <div class="mt-3 space-y-2 md:hidden">
+        <div
+          v-for="row in monthlyRows"
+          :key="`mobile-monthly-${row.label}`"
+          class="rounded border border-gray-200 bg-gray-50 p-3 text-xs dark:border-gray-700 dark:bg-gray-800"
+        >
+          <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ row.label }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">No. of Bets</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ row.betsCount }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Average Odds</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ displayOdds(row.averageOdds) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Total Stake</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(row.totalStake) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Total Returns</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(row.totalReturns) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">P/L</p>
+              <p class="font-semibold" :class="signedClass(row.totalProfit)">{{ formatCurrency(row.totalProfit) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">ROI</p>
+              <p class="font-semibold" :class="signedClass(row.roi)">{{ formatRoi(row.roi) }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Daily</h2>
-      <div class="mt-3 overflow-x-auto">
+      <div class="mt-3 hidden overflow-x-auto md:block">
         <table class="w-full whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">
           <thead class="border-b border-gray-200 dark:border-gray-700">
             <tr>
@@ -413,11 +555,80 @@ onBeforeUnmount(() => {
           </tbody>
         </table>
       </div>
+      <div class="mt-3 space-y-2 md:hidden">
+        <div
+          v-for="row in visibleDailyRows"
+          :key="`mobile-daily-${row.date}`"
+          class="rounded border border-gray-200 bg-gray-50 p-3 text-xs dark:border-gray-700 dark:bg-gray-800"
+        >
+          <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ row.date }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">No. of Bets</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ row.betsCount }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Daily Odds Avg</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ displayOdds(row.averageOdds) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Total Stake</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(row.totalStake) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Total Returns</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(row.totalReturns) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">P/L</p>
+              <p class="font-semibold" :class="signedClass(row.totalProfit)">{{ formatCurrency(row.totalProfit) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">ROI</p>
+              <p class="font-semibold" :class="signedClass(row.roi)">{{ formatRoi(row.roi) }}</p>
+            </div>
+          </div>
+        </div>
+        <div
+          v-if="nextHiddenDailyRow"
+          class="rounded border border-gray-200 bg-gray-50 p-3 text-xs opacity-55 blur-[1px] select-none pointer-events-none dark:border-gray-700 dark:bg-gray-800"
+        >
+          <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ nextHiddenDailyRow.date }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">No. of Bets</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ nextHiddenDailyRow.betsCount }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Daily Odds Avg</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ displayOdds(nextHiddenDailyRow.averageOdds) }}</p>
+            </div>
+          </div>
+        </div>
+        <div v-if="hasMoreDailyRows && !isDailyExpanded" class="pt-1 text-center">
+          <button
+            type="button"
+            class="text-xs font-medium text-gray-700 underline underline-offset-2 hover:text-gray-900 dark:text-gray-200 dark:hover:text-gray-100"
+            @click="isDailyExpanded = true"
+          >
+            Click to see more
+          </button>
+        </div>
+        <div v-if="hasMoreDailyRows && isDailyExpanded" class="pt-1 text-center">
+          <button
+            type="button"
+            class="text-xs font-medium text-gray-700 underline underline-offset-2 hover:text-gray-900 dark:text-gray-200 dark:hover:text-gray-100"
+            @click="isDailyExpanded = false"
+          >
+            Show fewer
+          </button>
+        </div>
+      </div>
     </section>
 
     <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Bookmaker</h2>
-      <div class="mt-3 overflow-x-auto">
+      <div class="mt-3 hidden overflow-x-auto md:block">
         <table class="w-full whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">
           <thead class="border-b border-gray-200 dark:border-gray-700">
             <tr>
@@ -446,6 +657,41 @@ onBeforeUnmount(() => {
             </tr>
           </tbody>
         </table>
+      </div>
+      <div class="mt-3 space-y-2 md:hidden">
+        <div
+          v-for="row in bookmakerRows"
+          :key="`mobile-bookie-${row.bookmaker}`"
+          class="rounded border border-gray-200 bg-gray-50 p-3 text-xs dark:border-gray-700 dark:bg-gray-800"
+        >
+          <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ row.bookmaker }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">No. of Bets</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ row.betsCount }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Average Odds</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ displayOdds(row.averageOdds) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Total Stake</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(row.totalStake) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">Total Returns</p>
+              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(row.totalReturns) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">P/L</p>
+              <p class="font-semibold" :class="signedClass(row.totalProfit)">{{ formatCurrency(row.totalProfit) }}</p>
+            </div>
+            <div>
+              <p class="text-gray-500 dark:text-gray-400">ROI</p>
+              <p class="font-semibold" :class="signedClass(row.roi)">{{ formatRoi(row.roi) }}</p>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </div>

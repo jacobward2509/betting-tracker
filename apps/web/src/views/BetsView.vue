@@ -4,14 +4,22 @@ import AddBetModal from "@/components/AddBetModal.vue";
 import EditBetModal from "@/components/EditBetModal.vue";
 import BetsTableControls from "@/components/BetsTableControls.vue";
 import { formatOddsForDisplay, type OddsFormat } from "@/utils/odds";
+import {
+  SELECTED_SEASON_STORAGE_KEY,
+  getCurrentSeasonKey,
+  getSeasonKeyFromDate,
+  getSeasonLabel,
+} from "@/utils/season";
 import api from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
+import { useSuggestionsStore } from "@/stores/suggestions";
 
 const bets = ref([]);
 const FILTERS_STORAGE_KEY = "bets-table-filters";
 const TABLE_STATE_STORAGE_KEY = "bets-table-state";
 
 type BetsFilters = {
+  season: string;
   fixture: string;
   date: string;
   bookie: string;
@@ -20,6 +28,7 @@ type BetsFilters = {
 };
 
 const defaultFilters = (): BetsFilters => ({
+  season: getSeasonLabel(getCurrentSeasonKey()),
   fixture: "",
   date: "",
   bookie: "",
@@ -29,7 +38,10 @@ const defaultFilters = (): BetsFilters => ({
 
 const sanitizeFilters = (value: unknown): BetsFilters => {
   const source = (value || {}) as Partial<BetsFilters>;
+  const seasonRaw = String(source.season || "").trim();
+  const season = /^\d{4}-\d{4}$/.test(seasonRaw) ? getSeasonLabel(seasonRaw) : seasonRaw;
   return {
+    season: season || getSeasonLabel(getCurrentSeasonKey()),
     fixture: String(source.fixture || ""),
     date: String(source.date || ""),
     bookie: String(source.bookie || ""),
@@ -41,7 +53,14 @@ const sanitizeFilters = (value: unknown): BetsFilters => {
 const loadSavedFilters = (): BetsFilters => {
   try {
     const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
-    if (!raw) return defaultFilters();
+    if (!raw) {
+      const defaults = defaultFilters();
+      const selectedSeason = localStorage.getItem(SELECTED_SEASON_STORAGE_KEY);
+      if (selectedSeason) {
+        defaults.season = String(selectedSeason);
+      }
+      return defaults;
+    }
     return sanitizeFilters(JSON.parse(raw));
   } catch {
     return defaultFilters();
@@ -90,6 +109,7 @@ try {
 }
 
 const authStore = useAuthStore();
+const suggestionsStore = useSuggestionsStore();
 
 type PersistedTableState = {
   sortKey: "date" | "stake" | "odds" | "result" | "profit" | null;
@@ -179,6 +199,9 @@ const openModal = () => (showModal.value = true);
 // Handle bet added
 const onBetAdded = () => {
   fetchBets(); // refresh table
+  if (authStore.user?.id) {
+    void suggestionsStore.preloadSuggestions(authStore.user.id, true);
+  }
 };
 
 const openEditModal = (bet: Record<string, any>) => {
@@ -188,10 +211,34 @@ const openEditModal = (bet: Record<string, any>) => {
 
 const onBetUpdated = () => {
   fetchBets();
+  if (authStore.user?.id) {
+    void suggestionsStore.preloadSuggestions(authStore.user.id, true);
+  }
 };
 
 const onFiltersUpdate = (nextFilters: typeof filters.value) => {
   filters.value = sanitizeFilters(nextFilters);
+};
+
+const seasonOptions = computed(() => {
+  const keys = new Set<string>([getCurrentSeasonKey()]);
+  for (const bet of bets.value as Array<Record<string, any>>) {
+    const seasonKey = getSeasonKeyFromDate(String(bet.placedAt || ""));
+    if (seasonKey) keys.add(seasonKey);
+  }
+  return Array.from(keys)
+    .sort((a, b) => b.localeCompare(a))
+    .map((key) => getSeasonLabel(key));
+});
+
+const getSeasonKeyFromLabel = (label: string) => {
+  const trimmed = String(label || "").trim();
+  const keyMatch = trimmed.match(/^(\d{4})-(\d{4})$/);
+  if (keyMatch) return `${keyMatch[1]}-${keyMatch[2]}`;
+  const match = trimmed.match(/^(\d{4})\s*\/\s*(\d{2})$/);
+  if (!match) return "";
+  const startYear = Number(match[1]);
+  return `${startYear}-${startYear + 1}`;
 };
 
 const openDeleteModal = (bet: Record<string, any>) => {
@@ -211,6 +258,9 @@ const confirmDelete = async () => {
     isDeleting.value = true;
     await api.delete(`/api/bets/${deletingBet.value.id}`);
     await fetchBets();
+    if (authStore.user?.id) {
+      void suggestionsStore.preloadSuggestions(authStore.user.id, true);
+    }
     closeDeleteModal();
   } catch {
     alert("Failed to delete bet. Please try again.");
@@ -440,12 +490,16 @@ const favouriteBookie = computed(() => {
 const filteredBets = computed(() => {
   const list = bets.value as Array<Record<string, any>>;
   const fixtureQuery = filters.value.fixture.trim().toLowerCase();
+  const seasonQuery = getSeasonKeyFromLabel(filters.value.season);
   const dateQuery = filters.value.date.trim();
   const bookieQuery = filters.value.bookie.trim();
   const stakeTypeQuery = filters.value.stakeType.trim();
   const resultQuery = filters.value.result.trim();
 
   return list.filter((bet) => {
+    if (seasonQuery && getSeasonKeyFromDate(String(bet.placedAt || "")) !== seasonQuery) {
+      return false;
+    }
     if (
       fixtureQuery &&
       !String(bet.fixture || "")
@@ -637,6 +691,7 @@ watch(bulkResult, (value) => {
 
 watch(
   () => [
+    filters.value.season,
     filters.value.fixture,
     filters.value.date,
     filters.value.bookie,
@@ -677,6 +732,17 @@ watch(
           }),
         ),
       );
+    } catch {
+      // ignore localStorage write errors
+    }
+  },
+);
+
+watch(
+  () => filters.value.season,
+  (season) => {
+    try {
+      localStorage.setItem(SELECTED_SEASON_STORAGE_KEY, season);
     } catch {
       // ignore localStorage write errors
     }
@@ -731,6 +797,7 @@ const columnOptions: Array<{
 
     <BetsTableControls
       :filters="filters"
+      :season-options="seasonOptions"
       :bookie-options="uniqueBookies"
       :stake-type-options="uniqueStakeTypes"
       :result-options="uniqueResults"
@@ -790,8 +857,142 @@ const columnOptions: Array<{
       </div>
     </div>
 
+    <div class="md:hidden space-y-3">
+      <div
+        v-if="selectedCount > 0"
+        class="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm dark:border-blue-900 dark:bg-blue-950/40"
+      >
+        <span class="font-medium text-blue-800 dark:text-blue-200">
+          {{ selectedCount }} selected
+        </span>
+        <span class="text-xs text-blue-700 dark:text-blue-300">
+          Select rows to update result, then Apply.
+        </span>
+        <select
+          v-model="bulkResult"
+          class="rounded border border-blue-200 bg-white px-2 py-1 text-sm dark:border-blue-800 dark:bg-gray-900 dark:text-gray-100"
+        >
+          <option>Open</option>
+          <option>Win</option>
+          <option>Loss</option>
+          <option>Cashed Out</option>
+        </select>
+        <input
+          v-if="bulkResult === 'Cashed Out'"
+          v-model.number="bulkCashOutValue"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="Cash Out Value"
+          class="w-36 rounded border border-blue-200 bg-white px-2 py-1 text-sm dark:border-blue-800 dark:bg-gray-900 dark:text-gray-100"
+        />
+        <button
+          @click="applyBulkResult"
+          :disabled="isApplyingBulkResult"
+          class="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {{ isApplyingBulkResult ? "Applying..." : "Apply" }}
+        </button>
+        <button
+          @click="clearBulkSelection"
+          class="bg-red-600 hover:bg-red-700 text-white border border-gray-300 px-3 py-1 text-xs font-semibold rounded-md dark:border-gray-700"
+        >
+          Clear
+        </button>
+      </div>
+
+      <div
+        v-for="bet in paginatedBets"
+        :key="`mobile-${bet.id}`"
+        class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+      >
+        <div class="mb-2 flex items-start justify-between gap-2">
+          <div>
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {{ bet.fixture }}
+            </p>
+            <p class="text-xs text-gray-600 dark:text-gray-400">
+              {{ new Date(bet.placedAt).toLocaleDateString() }}
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            :checked="isBetSelected(String(bet.id))"
+            class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            @change="toggleBetSelection(String(bet.id))"
+          />
+        </div>
+
+        <p class="mb-2 text-sm text-gray-800 dark:text-gray-200">
+          {{ getDisplaySelection(bet) }}
+        </p>
+
+        <div class="mb-2 flex flex-wrap items-center gap-2">
+          <span
+            class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+            :class="getBookmakerClasses(bet.bookmaker)"
+          >
+            {{ bet.bookmaker }}
+          </span>
+          <span
+            class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+            :class="getStakeTypeClasses(bet.stakeType)"
+          >
+            {{ getStakeTypeLabel(bet.stakeType) }}
+          </span>
+          <span
+            class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+            :class="getResultClasses(bet.result)"
+          >
+            {{ getResultLabel(bet.result) }}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 text-xs">
+          <div class="rounded bg-gray-50 px-2 py-1 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">Stake</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">£ {{ Number(bet.stake) }}</p>
+          </div>
+          <div class="rounded bg-gray-50 px-2 py-1 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">Odds</p>
+            <p class="font-semibold text-gray-900 dark:text-gray-100">
+              {{ formatOddsForDisplay(Number(bet.odds), oddsFormat) }}
+            </p>
+          </div>
+          <div class="rounded bg-gray-50 px-2 py-1 dark:bg-gray-800">
+            <p class="text-gray-500 dark:text-gray-400">P/L</p>
+            <p class="font-semibold" :class="getProfitClass(bet.profit)">
+              {{ formatProfit(bet.profit) }}
+            </p>
+          </div>
+        </div>
+
+        <p
+          v-if="getResultLabel(bet.result) === 'Cashed Out' && bet.cashOutValue != null"
+          class="mt-2 text-xs text-gray-600 dark:text-gray-400"
+        >
+          Cash Out: £{{ Number(bet.cashOutValue).toFixed(2) }}
+        </p>
+
+        <div class="mt-3 flex items-center gap-2">
+          <button
+            @click="openEditModal(bet)"
+            class="px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+          >
+            Edit
+          </button>
+          <button
+            @click="openDeleteModal(bet)"
+            class="px-3 py-1.5 text-xs font-semibold rounded-md bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div
-      class="relative overflow-x-auto shadow-sm rounded-lg border border-gray-200 dark:border-gray-800"
+      class="relative hidden md:block overflow-x-auto shadow-sm rounded-lg border border-gray-200 dark:border-gray-800"
     >
       <div
         v-if="selectedCount > 0"

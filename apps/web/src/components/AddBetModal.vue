@@ -296,6 +296,8 @@ import {
   parseOddsInput,
   type OddsFormat,
 } from "@/utils/odds";
+import { useAuthStore } from "@/stores/auth";
+import { useSuggestionsStore } from "@/stores/suggestions";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -313,13 +315,12 @@ const bookie = ref("");
 const bookmakers = ref<{ id: string; bookmakers: string }[]>([]);
 const betTypes = ref<{ id: number | string; betTypes: string }[]>([]);
 const playerPropMarkets = ref<{ id: number; markets: string }[]>([]);
-const teamSuggestions = ref<string[]>([]);
-const playerSuggestions = ref<string[]>([]);
-let playerSuggestionFetchTimer: ReturnType<typeof setTimeout> | null = null;
 const fallbackBetTypes = ["Accumulator", "Bet Builder", "Player Prop", "Superboost", "FT Result", "Other"];
 const userDefaultBookmaker = ref("");
 const userDefaultBetType = ref("Player Prop");
 const userDefaultStake = ref(5);
+const authStore = useAuthStore();
+const suggestionsStore = useSuggestionsStore();
 
 const fetchBookmakers = async () => {
   try {
@@ -357,26 +358,6 @@ const fetchPlayerPropMarkets = async () => {
   }
 };
 
-const fetchTeamSuggestions = async () => {
-  try {
-    const res = await api.get("/api/team-suggestions");
-    teamSuggestions.value = Array.isArray(res.data) ? res.data.map((item: unknown) => String(item)) : [];
-  } catch (error) {
-    console.error("Failed to fetch team suggestions:", error);
-  }
-};
-
-const fetchPlayerSuggestions = async (query?: string) => {
-  try {
-    const res = await api.get("/api/player-suggestions", {
-      params: query ? { q: query } : undefined,
-    });
-    playerSuggestions.value = Array.isArray(res.data) ? res.data.map((item: unknown) => String(item)) : [];
-  } catch (error) {
-    console.error("Failed to fetch player suggestions:", error);
-  }
-};
-
 const buildFilteredTeamSuggestions = (term: string) => {
   const normalized = String(term || "")
     .trim()
@@ -384,7 +365,7 @@ const buildFilteredTeamSuggestions = (term: string) => {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
   if (!normalized) return [];
-  return teamSuggestions.value
+  return suggestionsStore.teams
     .filter((team) =>
       team
         .toLowerCase()
@@ -406,7 +387,7 @@ const filteredPlayerSuggestions = computed(() => {
   if (!normalized) return [];
 
   const tokens = normalized.split(/\s+/).filter(Boolean);
-  return playerSuggestions.value
+  return suggestionsStore.players
     .filter((name) => {
       const normalizedName = name
         .toLowerCase()
@@ -448,7 +429,9 @@ onMounted(() => {
   fetchBookmakers();
   fetchBetTypes();
   fetchPlayerPropMarkets();
-  fetchTeamSuggestions();
+  if (authStore.user?.id) {
+    void suggestionsStore.preloadSuggestions(authStore.user.id);
+  }
   fetchUserConfig().then(() => {
     applyUserDefaults();
   });
@@ -667,28 +650,6 @@ watch(betType, (value) => {
   if (value !== "Other") {
     otherBetType.value = "";
   }
-  if (value !== "Player Prop") {
-    playerSuggestions.value = [];
-  }
-});
-
-watch(player, (value) => {
-  const query = String(value || "").trim();
-  if (!query || betType.value !== "Player Prop") {
-    playerSuggestions.value = [];
-    if (playerSuggestionFetchTimer) {
-      clearTimeout(playerSuggestionFetchTimer);
-      playerSuggestionFetchTimer = null;
-    }
-    return;
-  }
-
-  if (playerSuggestionFetchTimer) {
-    clearTimeout(playerSuggestionFetchTimer);
-  }
-  playerSuggestionFetchTimer = setTimeout(() => {
-    fetchPlayerSuggestions(query);
-  }, 150);
 });
 
 watch(

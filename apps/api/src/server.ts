@@ -741,6 +741,69 @@ app.get('/api/team-suggestions', requireAuth, async (req: AuthenticatedRequest, 
   return res.json(suggestions);
 });
 
+app.get('/api/suggestions', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const rows = await prisma.bet.findMany({
+    where: {
+      userId: req.user?.id,
+    },
+    select: {
+      fixture: true,
+      betType: true,
+      selection: true,
+      playerPropMarket: true,
+    },
+    orderBy: {
+      placedAt: 'desc',
+    },
+    take: 5000,
+  });
+
+  const teamStats = new Map<string, { name: string; count: number }>();
+  const playerStats = new Map<string, { name: string; count: number }>();
+
+  for (const row of rows) {
+    const teams = parseFixtureTeams(row.fixture);
+    for (const team of teams) {
+      const key = team.toLowerCase();
+      const existing = teamStats.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        teamStats.set(key, { name: team, count: 1 });
+      }
+    }
+
+    if (String(row.betType || '') === 'Player Prop') {
+      const player = parsePlayerFromSelection(row.selection, row.playerPropMarket);
+      if (player) {
+        const key = player.toLowerCase();
+        const existing = playerStats.get(key);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          playerStats.set(key, { name: player, count: 1 });
+        }
+      }
+    }
+  }
+
+  const teams = Array.from(teamStats.values())
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    })
+    .map((item) => item.name);
+
+  const players = Array.from(playerStats.values())
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    })
+    .map((item) => item.name);
+
+  return res.json({ teams, players });
+});
+
 app.get('/api/player-suggestions', requireAuth, async (req: AuthenticatedRequest, res) => {
   const query = String(req.query.q || '')
     .trim()
