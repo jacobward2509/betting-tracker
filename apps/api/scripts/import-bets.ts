@@ -7,7 +7,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 type CsvRow = Record<string, string>;
 
-type StakeType = 'NORMAL' | 'FREE';
+type StakeType = 'NORMAL' | 'FREE' | 'NORMAL_PLUS_FREE';
 type ResultType = 'OPEN' | 'WON' | 'LOST' | 'VOID';
 type BookmakerType =
   | 'Bet365'
@@ -55,6 +55,7 @@ const toNumber = (value: string): number | null => {
 
 const normalizeStakeType = (value: string): StakeType => {
   const v = normalize(value).toUpperCase();
+  if (v === 'NORMAL + FREE' || v === 'NORMAL_PLUS_FREE') return 'NORMAL_PLUS_FREE';
   return v === 'FREE' ? 'FREE' : 'NORMAL';
 };
 
@@ -74,7 +75,7 @@ const normalizeBookmaker = (value: string): BookmakerType | null => {
   if (v === 'LADBROKES') return 'Ladbrokes';
   if (v === 'PADDYPOWER') return 'PaddyPower';
   if (v === 'SKYBET') return 'SkyBet';
-  if (v === 'WILLIAMHILL') return 'WilliamHill';
+  if (v === 'WILLIAMHILL') return 'William Hill';
   return null;
 };
 

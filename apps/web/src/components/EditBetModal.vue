@@ -170,12 +170,13 @@
                 <option disabled value="">Select stake type</option>
                 <option>Normal</option>
                 <option>Free</option>
+                <option>Normal + Free</option>
               </select>
             </div>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
-            <div>
+            <div v-if="stakeType !== 'Normal + Free'">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Stake (£)</label>
               <input
                 v-model.number="stake"
@@ -186,8 +187,32 @@
                 required
               />
             </div>
+            <template v-else>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Normal Stake (£)</label>
+                <input
+                  v-model.number="normalStake"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  required
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Free Stake (£)</label>
+                <input
+                  v-model.number="freeStake"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  required
+                />
+              </div>
+            </template>
 
-            <div>
+            <div :class="stakeType === 'Normal + Free' ? 'sm:col-span-2' : ''">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Odds</label>
               <div v-if="props.oddsFormat === 'fractional'" class="mt-1 flex items-center gap-2">
                 <input
@@ -319,6 +344,8 @@ const oddsNumerator = ref(1);
 const oddsDenominator = ref(1);
 const result = ref("Open");
 const cashOutValue = ref<number | null>(null);
+const normalStake = ref<number | null>(null);
+const freeStake = ref<number | null>(null);
 
 const getCurrentOddsFormat = (): OddsFormat => props.oddsFormat || "decimal";
 
@@ -349,6 +376,7 @@ const resultReverseMapping: Record<string, string> = {
 const stakeTypeMapping: Record<string, string> = {
   Normal: "NORMAL",
   Free: "FREE",
+  "Normal + Free": "NORMAL_PLUS_FREE",
 };
 
 const halfStepMarkets = new Set([
@@ -489,7 +517,13 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
   date.value = new Date(bet.placedAt).toISOString().slice(0, 10);
   fixture.value = String(bet.fixture || "");
   bookie.value = String(bet.bookmaker || "");
-  stakeType.value = String(bet.stakeType || "").toUpperCase() === "FREE" ? "Free" : "Normal";
+  const stakeTypeValue = String(bet.stakeType || "").toUpperCase();
+  stakeType.value =
+    stakeTypeValue === "FREE"
+      ? "Free"
+      : stakeTypeValue === "NORMAL_PLUS_FREE"
+        ? "Normal + Free"
+        : "Normal";
   betType.value = String(bet.betType || "Player Prop");
   playerPropMarket.value = String(bet.playerPropMarket || "");
   if (betType.value === "Player Prop") {
@@ -534,6 +568,14 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
     otherBetType.value = "";
   }
   stake.value = Number(bet.stake || 0);
+  normalStake.value = bet.normalStake != null ? Number(bet.normalStake) : null;
+  if (stakeType.value === "Normal + Free") {
+    const total = Number(bet.stake || 0);
+    const normal = Number(normalStake.value || 0);
+    freeStake.value = Math.max(0, total - normal);
+  } else {
+    freeStake.value = null;
+  }
   odds.value = Number(bet.odds || 1);
   syncOddsFields();
   result.value = resultReverseMapping[String(bet.result || "OPEN")] || "Open";
@@ -579,6 +621,24 @@ const submitEdit = async () => {
     alert("Please enter a valid Cash Out value.");
     return;
   }
+  const isNormalPlusFree = stakeType.value === "Normal + Free";
+  const totalStake = isNormalPlusFree
+    ? Number(normalStake.value || 0) + Number(freeStake.value || 0)
+    : Number(stake.value);
+
+  if (isNormalPlusFree) {
+    const normalStakeValue = Number(normalStake.value);
+    const freeStakeValue = Number(freeStake.value);
+    if (
+      !Number.isFinite(normalStakeValue) ||
+      !Number.isFinite(freeStakeValue) ||
+      normalStakeValue < 0 ||
+      freeStakeValue < 0
+    ) {
+      alert("Normal Stake and Free Stake must be valid numbers.");
+      return;
+    }
+  }
   if (betType.value !== "Accumulator" && (!homeTeam.value.trim() || !awayTeam.value.trim())) {
     alert("Home Team and Away Team are required.");
     return;
@@ -605,11 +665,12 @@ const submitEdit = async () => {
       selection: generatedDescription,
       bookmaker: bookie.value,
       stakeType: stakeTypeMapping[stakeType.value] || "NORMAL",
+      normalStake: isNormalPlusFree ? Number(normalStake.value) : null,
       betType: betType.value,
       playerPropMarket: betType.value === "Player Prop" ? playerPropMarket.value : null,
-      stake: Number(stake.value),
+      stake: totalStake,
       odds: Number(odds.value),
-      potentialReturn: Number(stake.value) * Number(odds.value),
+      potentialReturn: totalStake * Number(odds.value),
       result: resultMapping[result.value],
       placedAt: new Date(date.value).toISOString(),
       cashOutValue: result.value === "Cashed Out" ? Number(cashOutValue.value) : null,
@@ -656,6 +717,13 @@ watch(
 
 watch(result, (value) => {
   if (value !== "Cashed Out") cashOutValue.value = null;
+});
+
+watch(stakeType, (value) => {
+  if (value !== "Normal + Free") {
+    normalStake.value = null;
+    freeStake.value = null;
+  }
 });
 
 watch(betType, (value) => {

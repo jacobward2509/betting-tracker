@@ -13,12 +13,14 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 const ALLOWED_ORIGINS = CORS_ORIGIN.split(',')
   .map((value) => value.trim())
   .filter(Boolean);
+const isLocalDevOrigin = (origin: string): boolean =>
+  /^https?:\/\/localhost:\d+$/i.test(origin) || /^https?:\/\/127\.0\.0\.1:\d+$/i.test(origin);
 
 app.disable('etag');
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      if (!origin || ALLOWED_ORIGINS.includes(origin) || isLocalDevOrigin(origin)) {
         callback(null, true);
         return;
       }
@@ -88,34 +90,54 @@ const normalizeResultValue = (value: unknown): 'OPEN' | 'WON' | 'LOST' | 'VOID' 
   return 'OPEN';
 };
 
+const normalizeStakeTypeValue = (value: unknown): 'NORMAL' | 'FREE' | 'NORMAL_PLUS_FREE' => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_')
+    .replace(/\+/g, '_PLUS_');
+
+  if (normalized === 'FREE') return 'FREE';
+  if (normalized === 'NORMAL_PLUS_FREE') return 'NORMAL_PLUS_FREE';
+  return 'NORMAL';
+};
+
 const calculateProfit = (input: {
   stake?: unknown;
+  normalStake?: unknown;
   odds?: unknown;
   result?: unknown;
   stakeType?: unknown;
   cashOutValue?: unknown;
 }): number | null => {
   const stake = toNumberOrNull(input.stake);
+  const normalStakeInput = toNumberOrNull(input.normalStake);
   const odds = toOddsOrNull(input.odds);
   const cashOutValue = toNumberOrNull(input.cashOutValue);
   const result = String(input.result || '').toUpperCase();
-  const stakeType = String(input.stakeType || '').toUpperCase();
+  const stakeType = normalizeStakeTypeValue(input.stakeType);
 
   if (stake === null) return null;
+  const effectiveStake =
+    stakeType === 'FREE' ? 0 : stakeType === 'NORMAL_PLUS_FREE' ? Math.max(0, Math.min(normalStakeInput ?? stake, stake)) : stake;
 
   if (result === 'WON') {
     if (odds === null) return null;
-    return stake * odds - stake;
+    if (stakeType === 'NORMAL_PLUS_FREE') {
+      // For mixed stake wins, free stake is not returned:
+      // P/L = (total stake * odds) - total stake
+      return stake * odds - stake;
+    }
+    return stake * odds - effectiveStake;
   }
 
   if (result === 'LOST') {
-    if (stakeType === 'FREE') return 0;
-    return -stake;
+    return -effectiveStake;
   }
 
   if (result === 'VOID') {
     if (cashOutValue === null) return null;
-    return cashOutValue - stake;
+    return cashOutValue - effectiveStake;
   }
 
   return null;
@@ -851,10 +873,12 @@ app.get('/api/player-suggestions', requireAuth, async (req: AuthenticatedRequest
 app.post('/api/bets', requireAuth, async (req: AuthenticatedRequest, res) => {
   const data: Record<string, unknown> = { ...req.body };
   data.result = normalizeResultValue(data.result);
+  data.stakeType = normalizeStakeTypeValue(data.stakeType);
   data.cashOutValue = data.result === 'VOID' ? toNumberOrNull(data.cashOutValue) : null;
   data.userId = req.user?.id;
 
   const stake = toNumberOrNull(data.stake);
+  const normalStake = toNumberOrNull(data.normalStake);
   const odds = toOddsOrNull(data.odds);
   if (odds === null || odds < 1) {
     return res
@@ -863,6 +887,21 @@ app.post('/api/bets', requireAuth, async (req: AuthenticatedRequest, res) => {
   }
 
   data.odds = odds;
+  if (data.stakeType === 'NORMAL_PLUS_FREE') {
+    if (stake === null || normalStake === null) {
+      return res
+        .status(400)
+        .json({ error: 'Normal stake is required when Stake Type is Normal + Free.' });
+    }
+    if (normalStake < 0 || normalStake > stake) {
+      return res
+        .status(400)
+        .json({ error: 'Normal stake must be between 0 and total stake.' });
+    }
+    data.normalStake = normalStake;
+  } else {
+    data.normalStake = null;
+  }
 
   if (stake !== null) {
     data.potentialReturn = stake * odds;
@@ -891,16 +930,19 @@ app.put('/api/bets/:id', requireAuth, async (req: AuthenticatedRequest, res) => 
   const merged = {
     ...existing,
     ...req.body,
+    stakeType: normalizeStakeTypeValue(req.body.stakeType ?? existing.stakeType),
     result: normalizedResult,
     cashOutValue: normalizedCashOutValue,
   };
 
   const data: Record<string, unknown> = {
     ...req.body,
+    stakeType: normalizeStakeTypeValue(req.body.stakeType ?? existing.stakeType),
     result: normalizedResult,
     cashOutValue: normalizedCashOutValue,
   };
   const stake = toNumberOrNull(merged.stake);
+  const normalStake = toNumberOrNull(merged.normalStake);
   const odds = toOddsOrNull(merged.odds);
   if (odds === null || odds < 1) {
     return res
@@ -909,6 +951,21 @@ app.put('/api/bets/:id', requireAuth, async (req: AuthenticatedRequest, res) => 
   }
 
   data.odds = odds;
+  if (data.stakeType === 'NORMAL_PLUS_FREE') {
+    if (stake === null || normalStake === null) {
+      return res
+        .status(400)
+        .json({ error: 'Normal stake is required when Stake Type is Normal + Free.' });
+    }
+    if (normalStake < 0 || normalStake > stake) {
+      return res
+        .status(400)
+        .json({ error: 'Normal stake must be between 0 and total stake.' });
+    }
+    data.normalStake = normalStake;
+  } else {
+    data.normalStake = null;
+  }
 
   if (stake !== null) {
     data.potentialReturn = stake * odds;

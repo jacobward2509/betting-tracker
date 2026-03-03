@@ -19,9 +19,9 @@ const signupBookmakers = ref([
   "Betfair",
   "BetUK",
   "Ladbrokes",
-  "PaddyPower",
+  "Paddy Power",
   "SkyBet",
-  "WilliamHill",
+  "William Hill",
 ]);
 const enabledBookmakers = ref<string[]>([...signupBookmakers.value]);
 const defaultBookmaker = ref(signupBookmakers.value[0] || "");

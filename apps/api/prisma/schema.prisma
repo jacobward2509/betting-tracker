@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Bet {
@@ -18,6 +19,7 @@ model Bet {
   betType         String    @default("Player Prop")
   playerPropMarket String?
   stake           Decimal
+  normalStake     Decimal?
   odds            Decimal
   potentialReturn Decimal
   result          BetResult @default(OPEN)
@@ -105,6 +107,7 @@ enum Bookmaker {
 enum StakeType {
   NORMAL
   FREE
+  NORMAL_PLUS_FREE
 }
 
 enum BetResult {

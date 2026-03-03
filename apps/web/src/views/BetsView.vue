@@ -4,6 +4,7 @@ import AddBetModal from "@/components/AddBetModal.vue";
 import EditBetModal from "@/components/EditBetModal.vue";
 import BetsTableControls from "@/components/BetsTableControls.vue";
 import { formatOddsForDisplay, type OddsFormat } from "@/utils/odds";
+import { formatBookmakerLabel } from "@/utils/bookmaker";
 import {
   SELECTED_SEASON_STORAGE_KEY,
   getCurrentSeasonKey,
@@ -301,12 +302,14 @@ const normalizeStakeType = (stakeType: string) =>
 const getStakeTypeLabel = (stakeType: string) => {
   const normalized = normalizeStakeType(stakeType);
   if (normalized === "FREE") return "Free";
+  if (normalized === "NORMAL_PLUS_FREE") return "Normal + Free";
   return "Normal";
 };
 
 const getStakeTypeClasses = (stakeType: string) => {
   const label = getStakeTypeLabel(stakeType);
   if (label === "Free") return "bg-blue-100 text-blue-800";
+  if (label === "Normal + Free") return "bg-emerald-100 text-emerald-800";
   return "bg-green-100 text-green-800";
 };
 
@@ -327,6 +330,8 @@ const getBookmakerClasses = (bookmaker: string) => {
   if (normalized === "WILLIAMHILL") return "bg-blue-900 text-yellow-300";
   return "bg-gray-100 text-gray-700";
 };
+
+const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker);
 
 const inferPlayerPropMarketFromLegacyText = (text: string, side: "O" | "U" | null): string => {
   const normalized = text.toLowerCase();
@@ -775,7 +780,7 @@ const columnOptions: Array<{
         </div>
         <div class="text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400">Favourite Bookie</p>
-          <p class="font-semibold text-gray-900 dark:text-gray-100">{{ favouriteBookie }}</p>
+          <p class="font-semibold text-gray-900 dark:text-gray-100">{{ getBookmakerLabel(String(favouriteBookie || "")) }}</p>
         </div>
         <div class="text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400">Total P/L</p>
@@ -932,7 +937,7 @@ const columnOptions: Array<{
             class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
             :class="getBookmakerClasses(bet.bookmaker)"
           >
-            {{ bet.bookmaker }}
+            {{ getBookmakerLabel(String(bet.bookmaker || "")) }}
           </span>
           <span
             class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
@@ -1108,7 +1113,7 @@ const columnOptions: Array<{
                 class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
                 :class="getBookmakerClasses(bet.bookmaker)"
               >
-                {{ bet.bookmaker }}
+                {{ getBookmakerLabel(String(bet.bookmaker || "")) }}
               </span>
             </td>
             <td v-if="visibleColumns.description" class="px-6 py-4">

@@ -178,12 +178,13 @@
                 <option disabled value="">Select stake type</option>
                 <option>Normal</option>
                 <option>Free</option>
+                <option>Normal + Free</option>
               </select>
             </div>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
-            <div>
+            <div v-if="stakeType !== 'Normal + Free'">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Stake (£)</label>
               <input
                 type="number"
@@ -195,8 +196,32 @@
                 data-test-id="input-stake"
               />
             </div>
+            <template v-else>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Normal Stake (£)</label>
+                <input
+                  type="number"
+                  v-model.number="normalStake"
+                  min="0"
+                  step="0.01"
+                  class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  required
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Free Stake (£)</label>
+                <input
+                  type="number"
+                  v-model.number="freeStake"
+                  min="0"
+                  step="0.01"
+                  class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  required
+                />
+              </div>
+            </template>
 
-            <div>
+            <div :class="stakeType === 'Normal + Free' ? 'sm:col-span-2' : ''">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Odds</label>
               <div
                 v-if="props.oddsFormat === 'fractional'"
@@ -281,6 +306,36 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div
+      v-if="showAddAnotherPrompt"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+    >
+      <div class="w-full max-w-sm rounded-lg bg-white p-4 shadow-xl dark:bg-gray-900">
+        <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Add another?
+        </h4>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+          Bet added successfully. Would you like to add another bet on the same fixture?
+        </p>
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            class="px-3 py-1.5 text-sm rounded border bg-gray-100 hover:bg-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+            @click="handleAddAnotherChoice(false)"
+          >
+            No
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+            @click="handleAddAnotherChoice(true)"
+          >
+            Yes
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -460,6 +515,10 @@ const oddsInput = ref("2");
 const oddsNumerator = ref(1);
 const oddsDenominator = ref(1);
 const cashOutValue = ref<number | null>(null);
+const normalStake = ref<number | null>(null);
+const freeStake = ref<number | null>(null);
+const showAddAnotherPrompt = ref(false);
+const pendingAddAnotherRepeat = ref(false);
 
 const getCurrentOddsFormat = (): OddsFormat => props.oddsFormat || "decimal";
 
@@ -473,29 +532,58 @@ const syncOddsFields = () => {
   oddsDenominator.value = Math.max(1, Number(den) || 1);
 };
 
-const closeModal = () => {
-  show.value = false;
-  emit("update:modelValue", false);
+const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) => {
+  const keepFixture = Boolean(options?.keepFixture);
+  const keepBetType = Boolean(options?.keepBetType);
+  const preservedHomeTeam = homeTeam.value.trim();
+  const preservedAwayTeam = awayTeam.value.trim();
+  const preservedBetType = betType.value;
+
   fixture.value = "";
   bookie.value = userDefaultBookmaker.value || "";
   stakeType.value = "Normal";
-  betType.value = userDefaultBetType.value || "Player Prop";
+  betType.value = keepBetType ? preservedBetType : userDefaultBetType.value || "Player Prop";
   ftResultOutcome.value = "Home Win";
-  homeTeam.value = "";
-  awayTeam.value = "";
+  homeTeam.value =
+    keepFixture && betType.value !== "Accumulator" ? preservedHomeTeam : "";
+  awayTeam.value =
+    keepFixture && betType.value !== "Accumulator" ? preservedAwayTeam : "";
   otherBetType.value = "";
   player.value = "";
   playerPropMarket.value = "";
   playerPropLineWhole.value = 0;
   cashOutValue.value = null;
+  normalStake.value = null;
+  freeStake.value = null;
+  result.value = "Open";
   stake.value = userDefaultStake.value;
   odds.value = 2;
   syncOddsFields();
 };
 
+const closeModal = () => {
+  showAddAnotherPrompt.value = false;
+  pendingAddAnotherRepeat.value = false;
+  show.value = false;
+  emit("update:modelValue", false);
+  resetForm();
+};
+
+const handleAddAnotherChoice = (repeat: boolean) => {
+  showAddAnotherPrompt.value = false;
+  if (repeat && pendingAddAnotherRepeat.value) {
+    resetForm({ keepFixture: true, keepBetType: true });
+    pendingAddAnotherRepeat.value = false;
+    return;
+  }
+  pendingAddAnotherRepeat.value = false;
+  closeModal();
+};
+
 const stakeTypeMapping: Record<string, string> = {
   Normal: "NORMAL",
   Free: "FREE",
+  "Normal + Free": "NORMAL_PLUS_FREE",
 };
 
 const resultMapping: Record<string, string> = {
@@ -568,6 +656,24 @@ const submitBet = async () => {
       alert("Please enter a valid Cash Out value.");
       return;
     }
+    const isNormalPlusFree = stakeType.value === "Normal + Free";
+    const totalStake = isNormalPlusFree
+      ? Number(normalStake.value || 0) + Number(freeStake.value || 0)
+      : Number(stake.value);
+
+    if (isNormalPlusFree) {
+      const normalStakeValue = Number(normalStake.value);
+      const freeStakeValue = Number(freeStake.value);
+      if (
+        !Number.isFinite(normalStakeValue) ||
+        !Number.isFinite(freeStakeValue) ||
+        normalStakeValue < 0 ||
+        freeStakeValue < 0
+      ) {
+        alert("Normal Stake and Free Stake must be valid numbers.");
+        return;
+      }
+    }
     if (betType.value !== "Accumulator" && (!homeTeam.value.trim() || !awayTeam.value.trim())) {
       alert("Home Team and Away Team are required.");
       return;
@@ -605,11 +711,12 @@ const submitBet = async () => {
       selection: generatedDescription,
       bookmaker: bookie.value,
       stakeType: stakeTypeMapping[stakeType.value] || "NORMAL",
+      normalStake: isNormalPlusFree ? Number(normalStake.value) : null,
       betType: betType.value,
       playerPropMarket: betType.value === "Player Prop" ? playerPropMarket.value : null,
-      stake: Number(stake.value),
+      stake: totalStake,
       odds: Number(odds.value),
-      potentialReturn: Number(stake.value) * Number(odds.value),
+      potentialReturn: totalStake * Number(odds.value),
       result: resultMapping[result.value],
       cashOutValue: result.value === "Cashed Out" ? Number(cashOutValue.value) : null,
       placedAt: new Date(date.value).toISOString(),
@@ -618,6 +725,15 @@ const submitBet = async () => {
     const res = await api.post("/api/bets", payload);
 
     emit("bet-added", res.data); // send back created bet
+
+    const hasFixture = Boolean(homeTeam.value.trim() && awayTeam.value.trim());
+    const canRepeatFixture = betType.value !== "Accumulator" && hasFixture;
+    if (canRepeatFixture) {
+      pendingAddAnotherRepeat.value = true;
+      showAddAnotherPrompt.value = true;
+      return;
+    }
+
     closeModal();
   } catch (err: any) {
     if (err.response?.data?.errors) {
@@ -632,6 +748,13 @@ const submitBet = async () => {
 
 watch(result, (value) => {
   if (value !== "Cashed Out") cashOutValue.value = null;
+});
+
+watch(stakeType, (value) => {
+  if (value !== "Normal + Free") {
+    normalStake.value = null;
+    freeStake.value = null;
+  }
 });
 
 watch(betType, (value) => {

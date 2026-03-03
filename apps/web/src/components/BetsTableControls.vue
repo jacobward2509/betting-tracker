@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { formatBookmakerLabel } from "@/utils/bookmaker";
 
 type Filters = {
   season: string;
@@ -53,6 +54,8 @@ const clearFilters = () => {
     result: "",
   });
 };
+
+const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker);
 </script>
 
 <template>
@@ -135,7 +138,7 @@ const clearFilters = () => {
           >
             <option value="">All Bookies</option>
             <option v-for="option in bookieOptions" :key="option" :value="option">
-              {{ option }}
+              {{ getBookmakerLabel(option) }}
             </option>
           </select>
         </div>

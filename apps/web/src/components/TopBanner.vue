@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import api from "@/lib/api";
+import { formatBookmakerLabel } from "@/utils/bookmaker";
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -241,6 +242,8 @@ const logout = async () => {
   await authStore.logout();
   router.push("/auth");
 };
+
+const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker);
 </script>
 
 <template>
@@ -397,7 +400,7 @@ const logout = async () => {
                         class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         @change="toggleBookmakerEnabled(bookmaker)"
                       />
-                      <span>{{ bookmaker }}</span>
+                      <span>{{ getBookmakerLabel(bookmaker) }}</span>
                     </label>
                   </div>
                 </div>
@@ -409,7 +412,7 @@ const logout = async () => {
                     class="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                   >
                     <option v-for="bookmaker in enabledBookmakers" :key="bookmaker" :value="bookmaker">
-                      {{ bookmaker }}
+                      {{ getBookmakerLabel(bookmaker) }}
                     </option>
                   </select>
                 </div>
