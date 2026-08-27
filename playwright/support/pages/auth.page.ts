@@ -1,11 +1,11 @@
 import { Page, Locator, expect } from '@playwright/test';
 
 /**
- * Page Object for AuthView (`/auth`), covering only its `signup` mode per
- * `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-signup.md`. Login
- * mode is intentionally out of scope for this page object's cosmetic checks
- * (see that test plan's Out of Scope section) — only the mode toggle itself
- * is exposed here, since it is used to reach signup mode.
+ * Page Object for AuthView (`/auth`), covering both its `login` mode (per
+ * `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-login.md`) and its
+ * `signup` mode (per
+ * `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-signup.md`). The
+ * component defaults to `login` mode; use `toggleMode()` to reach `signup`.
  */
 export class AuthPage {
   readonly page: Page;
@@ -163,6 +163,13 @@ export class AuthPage {
   /** Fills the Name, Email, and Password fields and submits — the minimum required fields for signup. */
   async submitSignupForm({ name, email, password }: { name: string; email: string; password: string }) {
     await this.fillName(name);
+    await this.fillEmail(email);
+    await this.fillPassword(password);
+    await this.submit();
+  }
+
+  /** Fills the Email and Password fields and submits — the required fields for login. */
+  async submitLoginForm({ email, password }: { email: string; password: string }) {
     await this.fillEmail(email);
     await this.fillPassword(password);
     await this.submit();
