@@ -4,7 +4,7 @@
 
 ## Purpose
 
-This workflow lets the user run an **already-generated** Playwright spec file (full file or a specific `describe` block) and go straight into the run → repair loop, without going through `plan` / `jira` / `generate` first. It's for existing coverage (e.g. `playwright/tests/api/quote-endpoints-v2.spec.ts`), not for newly authored endpoints — use `test-plan-generation.md` for those.
+This workflow lets the user run an **already-generated** Playwright spec file (full file or a specific `describe` block) and go straight into the run → repair loop, without going through `plan` / `jira` / `generate` first. It's for existing coverage (e.g. `playwright/tests/api/quote-endpoints-v2.spec.ts`), not for newly authored endpoints — use `api-test-plan-generation.md` for those.
 
 ## Trigger Phrase
 

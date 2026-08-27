@@ -1,6 +1,6 @@
 # Attach Incomplete Workflow State to Jira
 
-> Guard: only trigger this workflow when the user has just chosen **"Abandon and overwrite"** in response to the "incomplete workflow in progress" conflict check (see `clinerules.md`'s "Starting a new workflow instance", and the guards in `test-plan-generation.md` / `run-existing-spec.md`). Never trigger this for a workflow that is already `stage: "done"` — that case is handled by `attach-workflow-state-to-jira.md` instead, automatically, as soon as `done` is reached.
+> Guard: only trigger this workflow when the user has just chosen **"Abandon and overwrite"** in response to the "incomplete workflow in progress" conflict check (see `clinerules.md`'s "Starting a new workflow instance", and the guards in `api-test-plan-generation.md` / `run-existing-spec.md`). Never trigger this for a workflow that is already `stage: "done"` — that case is handled by `attach-workflow-state-to-jira.md` instead, automatically, as soon as `done` is reached.
 
 ## Trigger
 
@@ -41,7 +41,7 @@ It is **not** a standalone trigger phrase — it only ever fires as a follow-on 
 
 5. Report the result back to the user — success (with the Jira attachment and comment responses) or failure (with the error returned). As with the completed-state workflow, the script can succeed at attaching the file but fail to post the comment — report both outcomes distinctly if this occurs.
 
-6. **Whether the attach succeeded, failed, or was declined in step 1**, proceed to overwrite `.ai/workflow-state.json` with the new workflow's initial state, per the calling workflow's own instructions (`test-plan-generation.md` or `run-existing-spec.md`). A failed or declined attach must never block starting the new workflow — the user has already chosen to abandon the old one.
+6. **Whether the attach succeeded, failed, or was declined in step 1**, proceed to overwrite `.ai/workflow-state.json` with the new workflow's initial state, per the calling workflow's own instructions (`api-test-plan-generation.md` or `run-existing-spec.md`). A failed or declined attach must never block starting the new workflow — the user has already chosen to abandon the old one.
 
 See `general-rules.md` for credential handling and confirmation requirements.
 

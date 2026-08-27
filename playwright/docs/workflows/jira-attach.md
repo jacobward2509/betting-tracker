@@ -35,5 +35,6 @@ Once the user's Yes/No decision has been resolved (attached successfully, or exp
 - If a ticket was confirmed and attached, set `ticket` to `<TICKET_KEY>`.
 
 Then **automatically continue** into the appropriate generation workflow — do not wait for the user to say "Now generate postman collection" / "Now generate playwright tests"; that trigger phrase only matters if generation is being (re-)started as a standalone action later, disconnected from a jira-attach step in the same session:
+
 - V1 → read and follow **`postman-generation.md`**
-- V2 → read and follow **`playwright-generation.md`**
+- V2 → read and follow **`playwright-api-generation.md`**
