@@ -11,7 +11,6 @@ export type ErrorCode =
   | 'ACCOUNT_EXISTS'
   | 'INVALID_CREDENTIALS'
   | 'UNAUTHORIZED'
-  | 'RATE_LIMITED'
   | 'PAYLOAD_TOO_LARGE'
   | 'NOT_FOUND'
   | 'INTERNAL_ERROR';

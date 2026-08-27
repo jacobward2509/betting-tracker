@@ -53,12 +53,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '429':
-          description: Too many signup attempts from this client. Retry later.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /api/auth/login:
@@ -98,12 +92,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '413':
           description: Request body exceeded the maximum allowed size.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '429':
-          description: Too many login attempts from this client. Retry later.
           content:
             application/json:
               schema:

@@ -3,7 +3,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import bookmakersRouter from './routes/bookmakers';
 import { prisma } from './prisma';
 import { sendError, zodFieldErrors } from './errors';
@@ -47,29 +46,6 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '10kb' }));
-
-// Auth endpoints are the most attractive brute-force/spam targets, so they get
-// their own stricter rate limits on top of anything applied elsewhere.
-const authRateLimitHandler = (_req: express.Request, res: express.Response) => {
-  sendError(res, 429, 'RATE_LIMITED', 'Too many attempts. Please try again later.');
-};
-
-const signupRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: authRateLimitHandler,
-});
-
-const loginRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: authRateLimitHandler,
-});
-
 
 const SESSION_DAYS = 30;
 const DEFAULT_BET_TYPE = 'Player Prop';
@@ -440,7 +416,7 @@ const ensureUserBetConfig = async (userId: string, overrides?: UserConfigOverrid
   };
 };
 
-app.post('/api/auth/signup', signupRateLimiter, asyncHandler(async (req, res) => {
+app.post('/api/auth/signup', asyncHandler(async (req, res) => {
   const parsed = signupRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return sendError(
@@ -495,7 +471,7 @@ app.post('/api/auth/signup', signupRateLimiter, asyncHandler(async (req, res) =>
   });
 }));
 
-app.post('/api/auth/login', loginRateLimiter, asyncHandler(async (req, res) => {
+app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const parsed = loginRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return sendError(
