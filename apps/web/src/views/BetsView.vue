@@ -814,6 +814,7 @@ const columnOptions: Array<{
       <button
         @click="openModal"
         class="bg-blue-600 text-white px-3 py-1.5 text-sm rounded-md hover:bg-blue-700"
+        data-test-id="add-bet-button"
       >
         Add Bet
       </button>
