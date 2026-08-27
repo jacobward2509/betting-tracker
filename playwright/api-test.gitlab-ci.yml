@@ -1,0 +1,93 @@
+.playwright_test_template:
+  image: 'mcr.microsoft.com/playwright:v1.60.0-noble'
+
+  tags:
+    - $GIT_RUNNER_TAG
+
+  environment:
+    name: $BUSINESS_REGION/$ENVIRONMENT
+    action: verify
+
+  allow_failure: false
+
+  cache:
+    key:
+      files:
+        - playwright/package-lock.json
+    paths:
+      - playwright/.npm/
+    policy: pull-push
+
+  artifacts:
+    when: always
+    paths:
+      - playwright/playwright-report/
+      - playwright/test-results/
+    expire_in: 7 days
+
+  script:
+    - npm --prefix ./playwright ci
+    - echo "Running $ENDPOINTS_FILE in $ENV"
+    - cd playwright && ENV=$ENV npx playwright test "$ENDPOINTS_FILE"
+
+  after_script:
+    - |
+      # Extract JIRA ticket key from commit message (e.g. "TAP-1234: fix something" -> TAP-1234)
+      JIRA_TICKET=$(echo "$CI_COMMIT_MESSAGE" | grep -oE '[A-Z]+-[0-9]+' | head -1 | tr -d '[:space:]' || true)
+      echo "Ticket extracted: '$JIRA_TICKET'"
+      echo "Comment URL: $JIRA_BASE_URL/rest/api/3/issue/$JIRA_TICKET/comment"
+
+      if [ -n "$JIRA_TICKET" ]; then
+
+        # Create a tar.gz archive of the playwright artifacts named after the spec file
+        ARCHIVE_NAME="${ENDPOINTS_FILE%.spec.ts}-report.tar.gz"
+        tar -czf "$ARCHIVE_NAME" playwright/playwright-report/ playwright/test-results/ || true
+        echo "Archive created: $(ls -lh $ARCHIVE_NAME 2>&1)"
+
+        # Extract test summary counts from the Playwright HTML report index
+        SUMMARY=$(grep -oP '\d+ (passed|failed|skipped)' playwright/playwright-report/index.html 2>/dev/null | tr '\n' ', ' | sed 's/, $//' || echo "no summary available")
+
+        # Determine overall job status label
+        if [ "$CI_JOB_STATUS" = "failed" ]; then
+          STATUS_LABEL="❌ FAILED"
+        else
+          STATUS_LABEL="✅ PASSED"
+        fi
+
+        # Post a comment to the JIRA ticket
+        curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+          -X POST \
+          -H "Content-Type: application/json" \
+          "$JIRA_BASE_URL/rest/api/3/issue/$JIRA_TICKET/comment" \
+          -d "{\"body\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"${STATUS_LABEL}\",\"marks\":[{\"type\":\"strong\"}]},{\"type\":\"text\",\"text\":\" | Spec: ${ENDPOINTS_FILE}\"},{\"type\":\"hardBreak\"},{\"type\":\"text\",\"text\":\"Results: ${SUMMARY}\"},{\"type\":\"hardBreak\"},{\"type\":\"text\",\"text\":\"Pipeline: ${CI_PIPELINE_URL}\"},{\"type\":\"hardBreak\"},{\"type\":\"text\",\"text\":\"Finished: $(date -u '+%Y-%m-%d %H:%M:%S UTC')\"}]}]}}"
+
+        # Upload the zipped artifacts as an attachment to the JIRA ticket
+        curl -D- -u "$JIRA_USER:$JIRA_API_TOKEN" \
+          -X POST \
+          -H "X-Atlassian-Token: nocheck" \
+          -F "file=@${ARCHIVE_NAME}" \
+          "$JIRA_BASE_URL/rest/api/3/issue/$JIRA_TICKET/attachments"
+
+      else
+        echo "No JIRA ticket key found in branch name '$CI_COMMIT_BRANCH' - skipping JIRA integration."
+      fi
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_TAG == null'
+
+# TODO: Add your spec file matrix below.
+# Example:
+#
+# api_tests_sit:
+#   extends: .playwright_test_template
+#   stage: deploy-sit
+#   needs:
+#     - job: deploy_sit
+#   variables:
+#     ENV: sit
+#   parallel:
+#     matrix:
+#       - BUSINESS_REGION: us
+#         ENVIRONMENT: sit
+#         ENDPOINTS_FILE:
+#           - 'your-endpoints-v2.spec.ts'

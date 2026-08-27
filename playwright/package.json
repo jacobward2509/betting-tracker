@@ -1,0 +1,27 @@
+{
+  "name": "playwright",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "playwright:ui:dev": "ENV=dev npx playwright test --ui",
+    "playwright:dev": "ENV=dev npx playwright test",
+    "playwright:ui:sit": "ENV=sit npx playwright test --ui",
+    "playwright:sit": "ENV=sit npx playwright test",
+    "playwright:ui:pre": "ENV=pre npx playwright test --ui",
+    "playwright:pre": "ENV=pre npx playwright test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^25.9.3",
+    "tsconfig-paths": "^4.2.0",
+    "ajv": "^8.20.0",
+    "dotenv": "^17.4.2",
+    "typescript": "^6.0.3"
+  }
+}

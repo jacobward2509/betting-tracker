@@ -6,7 +6,8 @@
     "build": "echo \"No build needed\"",
     "import:bets": "tsx scripts/import-bets.ts",
     "repair:bets": "tsx scripts/repair-imported-bets.ts",
-    "repair:bet-types": "tsx scripts/repair-bet-types-retrofit.ts"
+    "repair:bet-types": "tsx scripts/repair-bet-types-retrofit.ts",
+    "reset:db": "tsx scripts/reset-database.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",
