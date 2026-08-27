@@ -1,6 +1,6 @@
 # Run and Validate Playwright Tests
 
-> Guard: if `.ai/workflow-state.json` shows `stage: "done"` for this endpoint with no failures recorded, don't re-run automatically — confirm with the user first.
+> Guard: if `.ai/api-workflow-state.json` shows `stage: "done"` for this endpoint with no failures recorded, don't re-run automatically — confirm with the user first.
 
 Immediately after Playwright test code has been generated for an endpoint (as part of the **Generate Playwright Tests** workflow), always ask the user:
 
@@ -68,8 +68,8 @@ Relay the output of this script directly back to the user in chat as the final s
 
 ## Workflow State Checkpoint (after summarization)
 
-- If there are **no failures**: update `.ai/workflow-state.json` — append `"run"` to `completed`, set `stage: "done"`.
-- If there **are failures**: update `.ai/workflow-state.json`:
+- If there are **no failures**: update `.ai/api-workflow-state.json` — append `"run"` to `completed`, set `stage: "done"`.
+- If there **are failures**: update `.ai/api-workflow-state.json`:
   - Append `"run"` to `completed`, set `stage: "repair"`.
   - Populate `failures` with one entry per failure from the summary, in the order presented: `{ "id": <1-based index>, "title": <test title>, "breadcrumb": <describe hierarchy>, "decision": null, "status": "undecided" }`.
   - Set `remainingRepairs` to `failures.length` (all undecided at this point, so all unresolved).
@@ -87,4 +87,4 @@ Immediately after relaying the `summarize-test-results.js` output, **if there ar
 
 Process each failure individually in order. If the user says "all self heal" or "all raise bugs", still confirm each one individually before acting — do not batch-apply without per-failure confirmation.
 
-Full detail for this two-phase process (collect decisions + apply fixes, then a single re-run, then finalize bug tickets) lives in **`self-heal.md`** — follow that file's "Handling Failures (multi-failure triage)" section from this point on. Each failure's `decision` and `status` get updated in `.ai/workflow-state.json`'s `failures` array as it's resolved; `remainingRepairs` is recomputed from that array each time, and when it reaches `0`, `stage` moves to `"done"`.
+Full detail for this two-phase process (collect decisions + apply fixes, then a single re-run, then finalize bug tickets) lives in **`self-heal.md`** — follow that file's "Handling Failures (multi-failure triage)" section from this point on. Each failure's `decision` and `status` get updated in `.ai/api-workflow-state.json`'s `failures` array as it's resolved; `remainingRepairs` is recomputed from that array each time, and when it reaches `0`, `stage` moves to `"done"`.

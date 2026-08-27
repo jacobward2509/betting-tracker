@@ -1,6 +1,6 @@
 # Attach Workflow State to Jira
 
-> Guard: only trigger this workflow when `.ai/workflow-state.json` shows `stage: "done"` **and** `remainingRepairs: 0`. If `stateAttachedToJira` is already `true` in the state file, do not re-offer this for the same completed state — it's already been resolved (attached or explicitly declined).
+> Guard: only trigger this workflow when `.ai/api-workflow-state.json` shows `stage: "done"` **and** `remainingRepairs: 0`. If `stateAttachedToJira` is already `true` in the state file, do not re-offer this for the same completed state — it's already been resolved (attached or explicitly declined).
 
 ## Trigger
 
@@ -21,7 +21,7 @@ It is **not** a standalone trigger phrase — it only ever fires as a follow-on 
    - If **Yes**, continue to step 2.
 
 2. **Derive a suggested ticket key:**
-   - If `.ai/workflow-state.json` has a non-null `ticket` field (set earlier by `jira-attach.md` for `api-test-generation` workflows), default to that ticket key.
+   - If `.ai/api-workflow-state.json` has a non-null `ticket` field (set earlier by `jira-attach.md` for `api-test-generation` workflows), default to that ticket key.
    - Otherwise (e.g. `api-test-execution` workflows, which have no `ticket` field), derive a suggested key from the current git branch name by extracting the first match of `[A-Z]+-[0-9]+` (e.g. branch `API-2806-improve-api-v-2-ai-workflow` → `API-2806`). Use `git branch --show-current` if not already known from context.
    - Either way, do not attempt to guess a key if neither source yields one — ask the user to provide it directly.
 
@@ -37,7 +37,7 @@ It is **not** a standalone trigger phrase — it only ever fires as a follow-on 
    ```
 
    This performs two API calls:
-   - `POST {JIRA_BASE_URL}/rest/api/3/issue/{TICKET_KEY}/attachments` — attaches `.ai/workflow-state.json`
+   - `POST {JIRA_BASE_URL}/rest/api/3/issue/{TICKET_KEY}/attachments` — attaches `.ai/api-workflow-state.json`
    - `POST {JIRA_BASE_URL}/rest/api/3/issue/{TICKET_KEY}/comment` — posts a concise summary comment:
      - No failures: `Workflow state attached to ticket — all tests passed, no repairs needed.`
      - With failures: `Workflow state attached to ticket — workflow complete.` followed by `Self-healed: <n> | Bugs raised: <n> (<KEY1>, <KEY2>) | Skipped: <n>`
@@ -54,7 +54,7 @@ See `general-rules.md` for credential handling and confirmation requirements.
 
 Once the user's Yes/No decision has been resolved (attached successfully, or explicitly declined):
 
-- Update `.ai/workflow-state.json`: set `stateAttachedToJira: true`.
+- Update `.ai/api-workflow-state.json`: set `stateAttachedToJira: true`.
 - If a ticket was confirmed and attached, also record `stateAttachedToJiraTicket: "<TICKET_KEY>"`.
 
 This is the final step of the workflow — no further stage transition happens after this (`stage` remains `"done"`).

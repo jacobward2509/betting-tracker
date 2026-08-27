@@ -1,6 +1,6 @@
 # Run an Existing Spec File
 
-> Guard: before starting, read `.ai/workflow-state.json`. If it tracks an **incomplete** workflow (any `stage` other than `"done"`, or `"done"` with unresolved `remainingRepairs`) for a _different_ `specFile`/`scope` (or a different `api-test-generation` endpoint) than what's being requested here, tell the user there's an incomplete workflow in progress and confirm whether to abandon/overwrite it or finish it first — same rule as `clinerules.md`'s "Starting a new workflow instance". If the user chooses to abandon and overwrite, follow `attach-incomplete-state-to-jira.md` first (offering to attach the current state to a Jira ticket) before writing the new workflow's initial state in step 4 below.
+> Guard: before starting, read `.ai/api-workflow-state.json`. If it tracks an **incomplete** workflow (any `stage` other than `"done"`, or `"done"` with unresolved `remainingRepairs`) for a _different_ `specFile`/`scope` (or a different `api-test-generation` endpoint) than what's being requested here, tell the user there's an incomplete workflow in progress and confirm whether to abandon/overwrite it or finish it first — same rule as `clinerules.md`'s "Starting a new workflow instance". If the user chooses to abandon and overwrite, follow `attach-incomplete-state-to-jira.md` first (offering to attach the current state to a Jira ticket) before writing the new workflow's initial state in step 4 below.
 
 ## Purpose
 
@@ -30,7 +30,7 @@ This workflow lets the user run an **already-generated** Playwright spec file (f
    > **Which environment should the tests run against?**
    - Options: `dev` / `sit`
 
-4. **Initialize `.ai/workflow-state.json`** for this run (overwriting only if the guard above has already been satisfied):
+4. **Initialize `.ai/api-workflow-state.json`** for this run (overwriting only if the guard above has already been satisfied):
 
    ```json
    {
@@ -66,4 +66,4 @@ This workflow lets the user run an **already-generated** Playwright spec file (f
 - Never run tests against an environment without the user explicitly confirming both the environment and the run scope first (same rule as `run-and-validate.md`).
 - Do not skip summarization — always run `summarize-test-results.js` and present its actual output, even if everything passed.
 - This workflow only applies to V2 (Playwright). It has no equivalent for V1/Postman collections, since there's no run/repair loop for those.
-- If `.ai/workflow-state.json` already shows `stage: "repair"` for this same `specFile`/`scope` with unresolved `failures`, resume per `self-heal.md`'s **"Resuming from state"** section instead of re-running from scratch — don't re-ask the environment/scope questions above.
+- If `.ai/api-workflow-state.json` already shows `stage: "repair"` for this same `specFile`/`scope` with unresolved `failures`, resume per `self-heal.md`'s **"Resuming from state"** section instead of re-running from scratch — don't re-ask the environment/scope questions above.

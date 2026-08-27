@@ -1,6 +1,6 @@
 # Test Plan Generation
 
-> Before starting, read `.ai/workflow-state.json` per the **Workflow State** section of `clinerules.md`. If an incomplete workflow already exists for a _different_ ticket/endpoint, confirm with the user whether to abandon/overwrite it or finish it first — same rule as `clinerules.md`'s "Starting a new workflow instance". If the user chooses to abandon and overwrite, follow `attach-incomplete-state-to-jira.md` first (offering to attach the current state to a Jira ticket) before writing the new workflow's initial state.
+> Before starting, read `.ai/api-workflow-state.json` per the **Workflow State** section of `clinerules.md`. If an incomplete workflow already exists for a _different_ ticket/endpoint, confirm with the user whether to abandon/overwrite it or finish it first — same rule as `clinerules.md`'s "Starting a new workflow instance". If the user chooses to abandon and overwrite, follow `attach-incomplete-state-to-jira.md` first (offering to attach the current state to a Jira ticket) before writing the new workflow's initial state.
 
 ## Trigger Phrase
 
@@ -85,7 +85,7 @@ Once the Markdown file path has been provided, proceed with the V1 Test Plan Gen
 
 Immediately after the test plan file is generated and saved (V1 or V2):
 
-- If `.ai/workflow-state.json` does not yet exist for this endpoint, create it with:
+- If `.ai/api-workflow-state.json` does not yet exist for this endpoint, create it with:
   `workflow: "api-test-generation"`, `apiVersion`, `endpoint` (method/path/operationId), `testPlanFile`, `stage: "jira"`, `completed: ["plan"]`.
 - If it already exists for this endpoint, set `stage: "jira"` and append `"plan"` to `completed`.
 

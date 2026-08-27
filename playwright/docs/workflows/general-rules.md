@@ -10,7 +10,7 @@ These apply across every workflow in `playwright/docs/workflows/`.
 
 ## Jira Credentials
 
-- The Jira scripts (`attach-test-plan-to-jira.sh`, `raise-bug-to-jira.sh`) read `JIRA_BASE_URL`, `JIRA_USER`, and `JIRA_API_TOKEN` from `playwright/.env.sit` (falling back to `playwright/.env.dev`).
+- The Jira scripts (`attach-test-plan-to-jira.sh`, `attach-workflow-state-to-jira.sh`, `raise-bug-to-jira.sh`) read `JIRA_BASE_URL`, `JIRA_USER`, and `JIRA_API_TOKEN` from `playwright/.env.sit` (falling back to `playwright/.env.dev`) — identically for both API and UI workflows.
 - These must be populated by the user themselves — do not ask the user for these credentials in chat, and never print their values.
 
 ## Confirmation Requirements
@@ -21,9 +21,19 @@ These apply across every workflow in `playwright/docs/workflows/`.
 
 ## Test Plan Output Rules
 
+### API Test Plans
+
 - Always include the scenario table with columns: `Scenario | Scenario Type | Use Case | Description | HTTP Return Status Code`
 - Cover all scenario types: Accepted, Negative – Missing Mandatory Data, Negative – Invalid Data Types, Negative – No Authentication, Negative – Internal Server Error
 - Include tests for every required and optional field declared in the YML schema
 - Include tests for every path parameter, query parameter, and request body field
 - Follow the Coverage Rules section of `api-test-scenarios.md`
 - Follow the Output Order section of `api-test-scenarios.md`
+
+### UI Test Plans
+
+- Always include the scenario table with columns: `Scenario | Scenario Type | Use Case | Description | Expected Result`
+- Cover all scenario types: Cosmetic, Functional, Navigation
+- Follow the exact Output Format section order of `ui-test-scenarios.md`: Page Information, Elements Under Test, Test Coverage Summary, Test Scenarios, Out of Scope, Automation Status, References
+- Follow the Coverage Rules section of `ui-test-scenarios.md`
+

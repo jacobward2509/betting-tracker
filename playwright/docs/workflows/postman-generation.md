@@ -1,6 +1,6 @@
 # Generate Postman Collection (V1 only)
 
-> Guard: if `.ai/workflow-state.json` shows `"generate"` already in `completed` for this endpoint, don't regenerate — ask the user if they want to explicitly redo it.
+> Guard: if `.ai/api-workflow-state.json` shows `"generate"` already in `completed` for this endpoint, don't regenerate — ask the user if they want to explicitly redo it.
 
 ## Entry Points
 
@@ -11,7 +11,7 @@ This workflow starts one of two ways:
 
 In either case, still run the workflow's own steps in full (including asking about an existing Postman collection reference in step 3 below) — automatic entry skips the trigger phrase, not the required inputs.
 
-**Guard:** Check the conversation context / `.ai/workflow-state.json`. If the test plan generated in this session was for a **V2** endpoint, respond with:
+**Guard:** Check the conversation context / `.ai/api-workflow-state.json`. If the test plan generated in this session was for a **V2** endpoint, respond with:
 
 > ❌ _"Postman collection generation is only available for V1 endpoints. For V2 endpoints, use 'Now generate playwright tests' instead."_
 
@@ -28,5 +28,5 @@ In either case, still run the workflow's own steps in full (including asking abo
 
 Once the collection has been generated:
 
-- Update `.ai/workflow-state.json`: append `"generate"` to `completed`, set `stage: "done"`.
+- Update `.ai/api-workflow-state.json`: append `"generate"` to `completed`, set `stage: "done"`.
 - V1 has no automated run/repair loop in this workflow, so `"done"` is the terminal stage.

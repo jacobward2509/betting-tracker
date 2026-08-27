@@ -12,6 +12,11 @@ function requireEnv(name: string): string {
 }
 
 export const API_BASE_URL = requireEnv('API_BASE_URL')
+// Optional (not required via requireEnv) — only needed once UI tests exist.
+// dev today resolves to a locally-started frontend (npm run dev:web, Vite
+// default http://localhost:5173); sit should point at a real deployed
+// frontend URL once one exists. See playwright/.env.example.
+export const WEB_BASE_URL = process.env.WEB_BASE_URL
 
 export default defineConfig({
   tsconfig: './tsconfig.json',
@@ -47,6 +52,31 @@ export default defineConfig({
       dependencies: ['api-setup'],
       use: {
         baseURL: process.env.API_BASE_URL
+      }
+    },
+
+    // -------------------
+    // UI tests — dev / sit (smoke / functional / e2e tiers)
+    // -------------------
+    {
+      name: 'smoke',
+      testMatch: /smoke\/.*\.spec\.ts/,
+      use: {
+        baseURL: WEB_BASE_URL
+      }
+    },
+    {
+      name: 'functional',
+      testMatch: /functional\/.*\.spec\.ts/,
+      use: {
+        baseURL: WEB_BASE_URL
+      }
+    },
+    {
+      name: 'e2e',
+      testMatch: /e2e\/.*\.spec\.ts/,
+      use: {
+        baseURL: WEB_BASE_URL
       }
     }
   ]

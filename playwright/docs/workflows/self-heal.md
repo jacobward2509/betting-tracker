@@ -1,13 +1,13 @@
 # Self Heal of Failures
 
-> Before starting, read `.ai/workflow-state.json`. If `stage` is `"repair"` with any `failures` entries not `status: "resolved"`, resume from there instead of restarting the whole failure list — see **Resuming from state** at the bottom.
+> Before starting, read `.ai/api-workflow-state.json`. If `stage` is `"repair"` with any `failures` entries not `status: "resolved"`, resume from there instead of restarting the whole failure list — see **Resuming from state** at the bottom.
 
 This workflow can be entered two ways:
 
 1. **Standalone trigger** — the user says **"self heal of failures"** directly, for a single failure or a small set.
 2. **From `run-and-validate.md`** — as part of the multi-failure triage immediately after a test run, where the user may mix self-heal / raise-bug / skip decisions across several failures.
 
-**Guard:** This workflow requires a failure report already produced in this session (from the **Run and Validate Playwright Tests** → **Summarizing Results** workflow, i.e. the output of `summarize-test-results.js`). If no failure report exists in context or in `.ai/workflow-state.json`, ask the user to either run the tests first, or provide the path to an existing `playwright/test-results/summary.md` / `results.json` to summarize.
+**Guard:** This workflow requires a failure report already produced in this session (from the **Run and Validate Playwright Tests** → **Summarizing Results** workflow, i.e. the output of `summarize-test-results.js`). If no failure report exists in context or in `.ai/api-workflow-state.json`, ask the user to either run the tests first, or provide the path to an existing `playwright/test-results/summary.md` / `results.json` to summarize.
 
 ## Single-Failure Workflow (standalone trigger)
 
@@ -31,7 +31,7 @@ This workflow can be entered two ways:
 
 5. **Apply the confirmed fix** using `replace_in_file` — update the status code assertion/schema-assert helper, update the test title if it no longer matches the scenario, and move the test between describe blocks if requested.
 
-   > **State update:** in `.ai/workflow-state.json`, find (or create) this failure's entry in `failures` and set `decision: "self-heal"`, `status: "fix-applied"`. Set `task` to this failure's title.
+   > **State update:** in `.ai/api-workflow-state.json`, find (or create) this failure's entry in `failures` and set `decision: "self-heal"`, `status: "fix-applied"`. Set `task` to this failure's title.
 
 6. **Ask how to re-run the fix**, giving an explicit choice (required before running anything):
    - **Run just the fixed test in isolation**, or
@@ -76,7 +76,7 @@ This workflow can be entered two ways:
 
 9. **Report the outcome:**
    - ✅ **Now passing** — confirm the fix worked, then ask if the corresponding test plan `.md` file (from `playwright/docs/test-plans/`) should also be updated to reflect the corrected expected status code/scenario description.
-     - **State update:** set this failure's entry in `.ai/workflow-state.json`'s `failures` to `status: "resolved"`. Recompute `remainingRepairs` as the count of entries with `status !== "resolved"`. If it reaches `0`, append `"repair"` to `completed` and set `stage: "done"`.
+     - **State update:** set this failure's entry in `.ai/api-workflow-state.json`'s `failures` to `status: "resolved"`. Recompute `remainingRepairs` as the count of entries with `status !== "resolved"`. If it reaches `0`, append `"repair"` to `completed` and set `stage: "done"`.
    - ❌ **Still failing** — show the new error detail and ask whether to try another fix, skip this failure, or stop the self-heal session. The entry's `status` stays `"fix-applied"` (or moves to `"skip"` → `"resolved"` if the user now chooses to skip it) — it is not `"resolved"` until it actually passes or is explicitly skipped.
 
 10. **Loop or finish** — if the user selected multiple/"all" failures in step 1, move to the next one and repeat from step 2. Otherwise, ask if they'd like to self-heal another failure from the original report.
@@ -223,7 +223,7 @@ Once all decisions have been collected and all self-heal code fixes applied, pro
 
    If there were no failures, skip this section entirely.
 
-   > **Final state update:** by this point every entry in `failures` should be `status: "resolved"` and `remainingRepairs` should be `0`. Append `"repair"` to `completed` and set `stage: "done"` in `.ai/workflow-state.json`.
+   > **Final state update:** by this point every entry in `failures` should be `status: "resolved"` and `remainingRepairs` should be `0`. Append `"repair"` to `completed` and set `stage: "done"` in `.ai/api-workflow-state.json`.
 
 ### Requirements
 
@@ -240,7 +240,7 @@ Once all decisions have been collected and all self-heal code fixes applied, pro
 
 ## Resuming from state
 
-If `.ai/workflow-state.json` shows `stage: "repair"` with any `failures` entries not `status: "resolved"` at the start of a session:
+If `.ai/api-workflow-state.json` shows `stage: "repair"` with any `failures` entries not `status: "resolved"` at the start of a session:
 
 1. Trust the state file's `failures` array over anything recalled from earlier in the conversation, per the Workflow State rules in `clinerules.md`. Don't re-derive progress from the conversation transcript if it's present in `failures`.
 2. Group the unresolved entries by their current state and act accordingly, without re-asking anything already decided:

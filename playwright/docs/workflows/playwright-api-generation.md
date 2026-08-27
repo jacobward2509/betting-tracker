@@ -1,6 +1,6 @@
 # Generate Playwright Tests (V2 only)
 
-> Guard: if `.ai/workflow-state.json` shows `"generate"` already in `completed` for this endpoint, don't regenerate — ask the user if they want to explicitly redo it.
+> Guard: if `.ai/api-workflow-state.json` shows `"generate"` already in `completed` for this endpoint, don't regenerate — ask the user if they want to explicitly redo it.
 
 ## Entry Points
 
@@ -11,7 +11,7 @@ This workflow starts one of two ways:
 
 In either case, still ask the two questions below before doing anything else — automatic entry skips the trigger phrase, not the required inputs.
 
-**Guard:** Check the conversation context / `.ai/workflow-state.json`. If the test plan generated in this session was for a **V1** endpoint, respond with:
+**Guard:** Check the conversation context / `.ai/api-workflow-state.json`. If the test plan generated in this session was for a **V1** endpoint, respond with:
 
 > ❌ _"Playwright test generation is only available for V2 endpoints. For V1 endpoints, use 'Now generate postman collection' instead."_
 
@@ -33,6 +33,6 @@ In either case, still ask the two questions below before doing anything else —
 
 Once the Playwright test code has been generated and saved into the spec file:
 
-- Update `.ai/workflow-state.json`: append `"generate"` to `completed`, set `stage: "run"`, and record `specFile` (the spec file path used).
+- Update `.ai/api-workflow-state.json`: append `"generate"` to `completed`, set `stage: "run"`, and record `specFile` (the spec file path used).
 
 Then proceed to **`run-and-validate.md`**.

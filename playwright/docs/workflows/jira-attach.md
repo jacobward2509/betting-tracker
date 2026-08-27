@@ -1,6 +1,6 @@
 # Attach Test Plan to Jira
 
-> Guard: if `.ai/workflow-state.json` shows `stage` is already past `"jira"` for this ticket/endpoint (i.e. `"jira"` is in `completed`), do not re-run this workflow — it has already been resolved (attached or explicitly skipped).
+> Guard: if `.ai/api-workflow-state.json` shows `stage` is already past `"jira"` for this ticket/endpoint (i.e. `"jira"` is in `completed`), do not re-run this workflow — it has already been resolved (attached or explicitly skipped).
 
 Immediately after a test plan markdown file has been generated and saved (whether V1 or V2), always ask the user:
 
@@ -31,7 +31,7 @@ See `general-rules.md` for credential handling and confirmation requirements.
 
 Once the user's Yes/No decision has been resolved (attached successfully, or explicitly declined):
 
-- Update `.ai/workflow-state.json`: set `stage: "generate"`, append `"jira"` to `completed`.
+- Update `.ai/api-workflow-state.json`: set `stage: "generate"`, append `"jira"` to `completed`.
 - If a ticket was confirmed and attached, set `ticket` to `<TICKET_KEY>`.
 
 Then **automatically continue** into the appropriate generation workflow — do not wait for the user to say "Now generate postman collection" / "Now generate playwright tests"; that trigger phrase only matters if generation is being (re-)started as a standalone action later, disconnected from a jira-attach step in the same session:
