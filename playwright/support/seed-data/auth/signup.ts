@@ -12,7 +12,9 @@ export interface SignupRequestBody {
 }
 
 const VALID_NAME = 'Cline QA Test'
-const VALID_PASSWORD = 'CorrectHorseBattery1'
+export const VALID_SIGNUP_PASSWORD = 'CorrectHorseBattery1'
+const VALID_PASSWORD = VALID_SIGNUP_PASSWORD
+
 
 /**
  * Generates a unique email address per call so parallel/repeated test runs never

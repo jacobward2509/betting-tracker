@@ -39,10 +39,10 @@ export default defineConfig({
     // -------------------
     // API setup (fetches auth token)
     // -------------------
-    {
-      name: 'api-setup',
-      testMatch: /api\/setup\/api\.setup\.ts/,
-    },
+    // {
+    //   name: 'api-setup',
+    //   testMatch: /api\/setup\/api\.setup\.ts/,
+    // },
 
     // -------------------
     // API tests — dev / sit / pre (full suite)
@@ -50,7 +50,7 @@ export default defineConfig({
     {
       name: 'api',
       testMatch: /api\/.*\.spec\.ts/,
-      dependencies: ['api-setup'],
+      // dependencies: ['api-setup'],
       use: {
         baseURL: process.env.API_BASE_URL,
       },

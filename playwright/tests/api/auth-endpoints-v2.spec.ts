@@ -1,7 +1,16 @@
 import {apiGet, apiPost} from '@functions/index'
-import {assertErrorResponseSchema, assertSignupSchema} from '@schema-assertions/auth'
-import {maximumSignupBody, type SignupRequestBody} from '@seed-data/auth'
+import {assertErrorResponseSchema, assertLoginSchema, assertSignupSchema} from '@schema-assertions/auth'
+import {
+  maximumLoginBody,
+  maximumSignupBody,
+  randomSignupEmail,
+  VALID_SIGNUP_PASSWORD,
+  type LoginRequestBody,
+  type SignupRequestBody
+} from '@seed-data/auth'
+
 import {APIRequestContext, APIResponse, expect, test} from '@playwright/test'
+
 
 test.describe('Auth endpoints-V2', () => {
   test.describe('signup', () => {
@@ -299,6 +308,261 @@ test.describe('Auth endpoints-V2', () => {
       })
     })
   })
+
+  test.describe('login', () => {
+    const URL_STUB = 'api/auth/login'
+    const SIGNUP_URL_STUB = 'api/auth/signup'
+    let registeredEmail: string
+    let requestBody: LoginRequestBody
+
+    test.beforeEach(async ({request}: {request: APIRequestContext}) => {
+      registeredEmail = randomSignupEmail()
+      const signupResponse = await apiPost(request, SIGNUP_URL_STUB, {
+        data: {name: 'Cline QA Test', email: registeredEmail, password: VALID_SIGNUP_PASSWORD},
+        noAuth: true
+      })
+      expect(signupResponse.status(), 'Setup signup should succeed with 201').toBe(201)
+
+      requestBody = maximumLoginBody(registeredEmail, VALID_SIGNUP_PASSWORD)
+    })
+
+    test.describe('200 - Accepted', () => {
+      let response: APIResponse
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 200').toBe(200)
+        const body = await response.json()
+        assertLoginSchema(body)
+      })
+
+      test('Valid request with all fields', async ({request}: {request: APIRequestContext}) => {
+        response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+      })
+
+      test('Validate login via GET request', async ({request}: {request: APIRequestContext}) => {
+        response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+        const loginBody = await response.json()
+
+        const meResponse = await apiGet(request, 'api/auth/me', {
+          headers: {Authorization: `Bearer ${loginBody.token}`},
+          noAuth: true
+        })
+
+        expect(meResponse.status(), 'GET /api/auth/me should return 200').toBe(200)
+        const meBody = await meResponse.json()
+        expect(meBody.user?.id, 'Returned user id matches login response').toBe(loginBody.user.id)
+        expect(meBody.user?.email, 'Returned user email matches login response').toBe(loginBody.user.email)
+      })
+
+      test('Login succeeds with differently-cased email', async ({request}: {request: APIRequestContext}) => {
+        const casedBody: LoginRequestBody = {
+          ...requestBody,
+          email: registeredEmail.toUpperCase()
+        }
+        response = await apiPost(request, URL_STUB, {data: casedBody, noAuth: true})
+      })
+    })
+
+    test.describe('400 - Bad Request', () => {
+      let response: APIResponse
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 400').toBe(400)
+        const body = await response.json()
+        assertErrorResponseSchema(body)
+      })
+
+      test.describe('Missing Mandatory Data', () => {
+        test('Missing request body', async ({request}: {request: APIRequestContext}) => {
+          response = await apiPost(request, URL_STUB, {data: {}, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+        })
+
+        test('Missing email field', async ({request}: {request: APIRequestContext}) => {
+          delete (requestBody as any).email
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const emailField = body.error.fields?.find((f: any) => f.field === 'email')
+          expect(emailField?.message, 'Error message is correct').toBe('Email is required.')
+        })
+
+        test('Missing password field', async ({request}: {request: APIRequestContext}) => {
+          delete (requestBody as any).password
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const passwordField = body.error.fields?.find((f: any) => f.field === 'password')
+          expect(passwordField?.message, 'Error message is correct').toBe('Password is required.')
+        })
+      })
+
+      test.describe('Invalid Data Types', () => {
+        test('email is NULL', async ({request}: {request: APIRequestContext}) => {
+          ;(requestBody as any).email = null
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const emailField = body.error.fields?.find((f: any) => f.field === 'email')
+          expect(emailField?.message, 'Error message is correct').toBe('Email is required.')
+        })
+
+        test('email as an Empty String', async ({request}: {request: APIRequestContext}) => {
+          requestBody.email = ''
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const emailField = body.error.fields?.find((f: any) => f.field === 'email')
+          expect(emailField?.message, 'Error message is correct').toBe('Please provide a valid email address.')
+        })
+
+        test('email as a Number', async ({request}: {request: APIRequestContext}) => {
+          ;(requestBody as any).email = 12345
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const emailField = body.error.fields?.find((f: any) => f.field === 'email')
+          expect(emailField?.message, 'Error message is correct').toBe('Email is required.')
+        })
+
+        test('Invalid email format', async ({request}: {request: APIRequestContext}) => {
+          requestBody.email = 'jane.doe@example'
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const emailField = body.error.fields?.find((f: any) => f.field === 'email')
+          expect(emailField?.message, 'Error message is correct').toBe('Please provide a valid email address.')
+        })
+
+        test('email above maximum length', async ({request}: {request: APIRequestContext}) => {
+          requestBody.email = `${'a'.repeat(246)}@example.com`
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const emailField = body.error.fields?.find((f: any) => f.field === 'email')
+          expect(emailField?.message, 'Error message is correct').toBe('Email must be at most 254 characters long.')
+        })
+
+        test('password is NULL', async ({request}: {request: APIRequestContext}) => {
+          ;(requestBody as any).password = null
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const passwordField = body.error.fields?.find((f: any) => f.field === 'password')
+          expect(passwordField?.message, 'Error message is correct').toBe('Password is required.')
+        })
+
+        test('password as an Empty String', async ({request}: {request: APIRequestContext}) => {
+          requestBody.password = ''
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const passwordField = body.error.fields?.find((f: any) => f.field === 'password')
+          expect(passwordField?.message, 'Error message is correct').toBe('Password is required.')
+        })
+
+        test('password as a Number', async ({request}: {request: APIRequestContext}) => {
+          ;(requestBody as any).password = 12345678901
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const passwordField = body.error.fields?.find((f: any) => f.field === 'password')
+          expect(passwordField?.message, 'Error message is correct').toBe('Password is required.')
+        })
+
+        test('password above maximum length', async ({request}: {request: APIRequestContext}) => {
+          requestBody.password = 'a'.repeat(73)
+          response = await apiPost(request, URL_STUB, {data: requestBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+          const passwordField = body.error.fields?.find((f: any) => f.field === 'password')
+          expect(passwordField?.message, 'Error message is correct').toBe('Password must be at most 72 characters long.')
+        })
+
+        test('Unrecognized field present', async ({request}: {request: APIRequestContext}) => {
+          const invalidBody: Record<string, unknown> = {...requestBody, rememberMe: true}
+          response = await apiPost(request, URL_STUB, {data: invalidBody, noAuth: true})
+
+          const body = await response.json()
+          expect(body.error.code, 'Error code is correct').toBe('VALIDATION_ERROR')
+        })
+      })
+    })
+
+    test.describe('401 - Unauthorized', () => {
+      let response: APIResponse
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 401').toBe(401)
+        const body = await response.json()
+        assertErrorResponseSchema(body)
+        expect(body.error.code, 'Error code is correct').toBe('INVALID_CREDENTIALS')
+        expect(body.error.message, 'Error message is correct').toBe('Invalid email or password.')
+      })
+
+      test('Unknown email', async ({request}: {request: APIRequestContext}) => {
+        const unknownBody: LoginRequestBody = maximumLoginBody(randomSignupEmail(), VALID_SIGNUP_PASSWORD)
+        response = await apiPost(request, URL_STUB, {data: unknownBody, noAuth: true})
+      })
+
+      test('Correct email, incorrect password', async ({request}: {request: APIRequestContext}) => {
+        const wrongPasswordBody: LoginRequestBody = {...requestBody, password: `${VALID_SIGNUP_PASSWORD}-wrong`}
+        response = await apiPost(request, URL_STUB, {data: wrongPasswordBody, noAuth: true})
+      })
+
+      test('Identical error for unknown email vs wrong password', async ({request}: {request: APIRequestContext}) => {
+        const unknownEmailResponse = await apiPost(request, URL_STUB, {
+          data: maximumLoginBody(randomSignupEmail(), VALID_SIGNUP_PASSWORD),
+          noAuth: true
+        })
+        const wrongPasswordResponse = await apiPost(request, URL_STUB, {
+          data: {...requestBody, password: `${VALID_SIGNUP_PASSWORD}-wrong`},
+          noAuth: true
+        })
+
+        const unknownEmailBody = await unknownEmailResponse.json()
+        const wrongPasswordBody = await wrongPasswordResponse.json()
+
+        expect(unknownEmailResponse.status(), 'Unknown email should return 401').toBe(401)
+        expect(wrongPasswordResponse.status(), 'Wrong password should return 401').toBe(401)
+        expect(unknownEmailBody.error.code, 'Error codes match').toBe(wrongPasswordBody.error.code)
+        expect(unknownEmailBody.error.message, 'Error messages match').toBe(wrongPasswordBody.error.message)
+
+        response = wrongPasswordResponse
+      })
+    })
+
+    test.describe('413 - Payload Too Large', () => {
+      test('Request body exceeds size limit', async ({request}: {request: APIRequestContext}) => {
+        const oversizedBody: LoginRequestBody = {
+          ...requestBody,
+          password: 'a'.repeat(20000)
+        }
+
+        const response = await apiPost(request, URL_STUB, {data: oversizedBody, noAuth: true})
+
+        expect(response.status(), 'Request should return 413').toBe(413)
+        const body = await response.json()
+        expect(body.error.code, 'Error code is correct').toBe('PAYLOAD_TOO_LARGE')
+        assertErrorResponseSchema(body)
+      })
+    })
+  })
 })
+
+
+
+
+
 
 
