@@ -2,8 +2,25 @@ import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import bookmakersRouter from './routes/bookmakers';
 import { prisma } from './prisma';
+import { sendError, zodFieldErrors } from './errors';
+import { loginRequestSchema, signupRequestSchema } from './validation';
+
+// Express 4 does not automatically forward rejected promises from async route
+// handlers to error-handling middleware — this wrapper does that so unexpected
+// errors always reach the centralized handler at the bottom of this file
+// instead of becoming unhandled promise rejections.
+const asyncHandler =
+  <Req extends express.Request = express.Request>(
+    handler: (req: Req, res: express.Response, next: express.NextFunction) => Promise<unknown>,
+  ) =>
+  (req: Req, res: express.Response, next: express.NextFunction) => {
+    handler(req, res, next).catch(next);
+  };
+
 
 dotenv.config();
 
@@ -17,6 +34,7 @@ const isLocalDevOrigin = (origin: string): boolean =>
   /^https?:\/\/localhost:\d+$/i.test(origin) || /^https?:\/\/127\.0\.0\.1:\d+$/i.test(origin);
 
 app.disable('etag');
+app.use(helmet());
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -28,7 +46,30 @@ app.use(
     },
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
+
+// Auth endpoints are the most attractive brute-force/spam targets, so they get
+// their own stricter rate limits on top of anything applied elsewhere.
+const authRateLimitHandler = (_req: express.Request, res: express.Response) => {
+  sendError(res, 429, 'RATE_LIMITED', 'Too many attempts. Please try again later.');
+};
+
+const signupRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: authRateLimitHandler,
+});
+
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: authRateLimitHandler,
+});
+
 
 const SESSION_DAYS = 30;
 const DEFAULT_BET_TYPE = 'Player Prop';
@@ -143,12 +184,6 @@ const calculateProfit = (input: {
   return null;
 };
 
-const normalizeEmail = (value: unknown): string =>
-  String(value || '')
-    .trim()
-    .toLowerCase();
-
-const isValidEmail = (email: string): boolean => /.+@.+\..+/.test(email);
 const normalizeName = (value: unknown): string =>
   String(value || '')
     .trim()
@@ -239,6 +274,12 @@ const verifyPassword = (password: string, stored: string): boolean => {
   if (derivedBuf.length !== hashBuf.length) return false;
   return crypto.timingSafeEqual(derivedBuf, hashBuf);
 };
+
+// Used to run a scrypt comparison of equivalent cost when no user is found
+// for the given email, so login response times don't reveal whether an
+// account exists (a timing side-channel / email-enumeration vector).
+const DUMMY_PASSWORD_HASH = hashPassword(crypto.randomBytes(32).toString('hex'));
+
 
 const createSession = async (userId: string) => {
   const token = crypto.randomBytes(48).toString('hex');
@@ -399,82 +440,48 @@ const ensureUserBetConfig = async (userId: string, overrides?: UserConfigOverrid
   };
 };
 
-app.post('/api/auth/signup', async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  const name = normalizeName(req.body?.name);
-  const password = String(req.body?.password || '');
-  const preferences = req.body?.preferences || null;
-
-  if (!isValidEmail(email)) {
-    return res.status(400).json({ error: 'Please provide a valid email address.' });
-  }
-  if (name.length < 2) {
-    return res.status(400).json({ error: 'Name must be at least 2 characters long.' });
-  }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+app.post('/api/auth/signup', signupRateLimiter, asyncHandler(async (req, res) => {
+  const parsed = signupRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'Please correct the highlighted fields and try again.',
+      zodFieldErrors(parsed.error),
+    );
   }
 
-  const allBookmakers = await prisma.bookmakers.findMany({ orderBy: { bookmakers: 'asc' } });
-  const allowedBookmakers = new Set(allBookmakers.map((item) => item.bookmakers));
-  const enabledBookmakersInput = Array.isArray(preferences?.enabledBookmakers)
-    ? sanitizeUniqueStrings(preferences.enabledBookmakers)
-    : null;
-  const defaultBookmakerInput =
-    preferences?.defaultBookmaker === null || preferences?.defaultBookmaker === undefined
-      ? null
-      : String(preferences.defaultBookmaker).trim();
-  const defaultBetTypeInput =
-    preferences?.defaultBetType === null || preferences?.defaultBetType === undefined
-      ? null
-      : String(preferences.defaultBetType).trim();
-  const defaultStakeInput =
-    preferences?.defaultStake === null || preferences?.defaultStake === undefined || preferences?.defaultStake === ''
-      ? null
-      : Number(preferences.defaultStake);
-
-  if (defaultStakeInput !== null && (!Number.isFinite(defaultStakeInput) || defaultStakeInput <= 0)) {
-    return res.status(400).json({ error: 'Default stake must be a positive number.' });
-  }
-  if (defaultBookmakerInput !== null && !allowedBookmakers.has(defaultBookmakerInput as any)) {
-    return res.status(400).json({ error: 'Invalid default bookmaker.' });
-  }
-  if (enabledBookmakersInput) {
-    const invalid = enabledBookmakersInput.find((item) => !allowedBookmakers.has(item as any));
-    if (invalid) {
-      return res.status(400).json({ error: `Invalid bookmaker: ${invalid}` });
-    }
-    if (enabledBookmakersInput.length === 0) {
-      return res.status(400).json({ error: 'At least one bookmaker must be enabled.' });
-    }
-  }
-  if (
-    defaultBookmakerInput !== null &&
-    enabledBookmakersInput &&
-    !enabledBookmakersInput.includes(defaultBookmakerInput)
-  ) {
-    return res.status(400).json({ error: 'Default bookmaker must be one of enabled bookmakers.' });
-  }
+  const { name, email, password } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    return res.status(409).json({ error: 'An account with this email already exists.' });
+    return sendError(res, 400, 'ACCOUNT_EXISTS', 'An account with this email already exists.');
   }
 
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      passwordHash: hashPassword(password),
-    },
-  });
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash: hashPassword(password),
+      },
+    });
+  } catch (error: any) {
+    // Guards against the race between the findUnique check above and this
+    // create() call — two concurrent signups for the same email can both
+    // pass the check, so the unique constraint is the real source of truth.
+    if (error?.code === 'P2002') {
+      return sendError(res, 400, 'ACCOUNT_EXISTS', 'An account with this email already exists.');
+    }
+    throw error;
+  }
 
-  await ensureUserBetConfig(user.id, {
-    enabledBookmakers: enabledBookmakersInput,
-    defaultBookmaker: defaultBookmakerInput,
-    defaultBetType: defaultBetTypeInput,
-    defaultStake: defaultStakeInput,
-  });
+  // Preferences (bookmakers/bet type/stake) are configured separately via
+  // PUT /api/user/config once the client has an authenticated session, so
+  // signup only ever needs to fall back to defaults here.
+  await ensureUserBetConfig(user.id);
 
   const token = await createSession(user.id);
 
@@ -486,15 +493,29 @@ app.post('/api/auth/signup', async (req, res) => {
       email: user.email,
     },
   });
-});
+}));
 
-app.post('/api/auth/login', async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  const password = String(req.body?.password || '');
+app.post('/api/auth/login', loginRateLimiter, asyncHandler(async (req, res) => {
+  const parsed = loginRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'Please correct the highlighted fields and try again.',
+      zodFieldErrors(parsed.error),
+    );
+  }
+
+  const { email, password } = parsed.data;
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || !verifyPassword(password, user.passwordHash)) {
-    return res.status(401).json({ error: 'Invalid email or password.' });
+  // Always run a scrypt comparison of equivalent cost, even when no user is
+  // found, so response timing can't be used to enumerate registered emails.
+  const passwordValid = verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+
+  if (!user || !passwordValid) {
+    return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
   }
 
   const token = await createSession(user.id);
@@ -507,7 +528,8 @@ app.post('/api/auth/login', async (req, res) => {
       email: user.email,
     },
   });
-});
+}));
+
 
 app.get('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) => {
   res.json({ user: req.user });
@@ -1055,6 +1077,24 @@ app.get('/api/player-prop-markets', requireAuth, async (_req, res) => {
 
 app.use('/api', requireAuth, bookmakersRouter);
 
+// Centralized error handler. Must be registered last (after all routes) and
+// declared with 4 parameters so Express recognizes it as an error handler.
+// Handles malformed JSON / oversized bodies from express.json() as well as
+// any error surfaced via asyncHandler()'s next(err) forwarding.
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err?.type === 'entity.too.large' || err?.status === 413) {
+    return sendError(res, 413, 'PAYLOAD_TOO_LARGE', 'Request body is too large.');
+  }
+
+  if (err?.type === 'entity.parse.failed' || err instanceof SyntaxError) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Request body must be valid JSON.');
+  }
+
+  console.error(err);
+  return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred.');
+});
+
 app.listen(PORT, () => {
   console.log(`API running on port ${PORT}`);
 });
+

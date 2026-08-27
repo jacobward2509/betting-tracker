@@ -65,19 +65,20 @@ const submit = async () => {
           return;
         }
       }
-      await authStore.signup(
-        name.value,
-        email.value,
-        password.value,
-        canConfigureSignup.value
-          ? {
-              enabledBookmakers: enabledBookmakers.value,
-              defaultBookmaker: defaultBookmaker.value,
-              defaultBetType: defaultBetType.value,
-              defaultStake: Number(defaultStake.value),
-            }
-          : undefined,
-      );
+      await authStore.signup(name.value, email.value, password.value);
+      if (canConfigureSignup.value) {
+        try {
+          await authStore.updatePreferences({
+            enabledBookmakers: enabledBookmakers.value,
+            defaultBookmaker: defaultBookmaker.value,
+            defaultBetType: defaultBetType.value,
+            defaultStake: Number(defaultStake.value),
+          });
+        } catch {
+          // Account creation already succeeded; preference setup can be
+          // retried later from the user menu, so don't block navigation.
+        }
+      }
     } else {
       await authStore.login(email.value, password.value);
     }

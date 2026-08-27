@@ -9,7 +9,7 @@ type AuthUser = {
   email: string;
 };
 
-type SignupPreferences = {
+type UserPreferences = {
   enabledBookmakers?: string[];
   defaultBookmaker?: string;
   defaultBetType?: string;
@@ -79,17 +79,8 @@ export const useAuthStore = defineStore("auth", () => {
     }
   };
 
-  const signup = async (
-    name: string,
-    email: string,
-    password: string,
-    preferences?: SignupPreferences,
-  ) => {
-    const payload: Record<string, unknown> = { name, email, password };
-    if (preferences) {
-      payload.preferences = preferences;
-    }
-    const res = await api.post("/api/auth/signup", payload);
+  const signup = async (name: string, email: string, password: string) => {
+    const res = await api.post("/api/auth/signup", { name, email, password });
     applyToken(String(res.data?.token || ""));
     user.value = res.data?.user || null;
     if (user.value?.id) {
@@ -120,6 +111,10 @@ export const useAuthStore = defineStore("auth", () => {
     user.value = res.data?.user || null;
   };
 
+  const updatePreferences = async (preferences: UserPreferences) => {
+    await api.put("/api/user/config", preferences);
+  };
+
   return {
     token,
     user,
@@ -130,6 +125,7 @@ export const useAuthStore = defineStore("auth", () => {
     login,
     logout,
     updateProfile,
+    updatePreferences,
     clearAuth,
   };
 });
