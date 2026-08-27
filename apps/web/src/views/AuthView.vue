@@ -222,7 +222,8 @@ const submit = async () => {
                   <input
                     type="checkbox"
                     :checked="enabledBookmakers.includes(bookmaker)"
-                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    :disabled="enabledBookmakers.length === 1 && enabledBookmakers.includes(bookmaker)"
+                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-60"
                     :data-test-id="`bookmaker-checkbox-${bookmaker}`"
                     @change="toggleSignupBookmaker(bookmaker)"
                   />

@@ -64,7 +64,7 @@
 | 2 | Functional | Betting Preferences sub-fields hidden by default | On signup page load, without clicking "Configure", verify the Enabled Bookmakers checkboxes, Default Bookmaker select, Default Bet Type select, and Default Stake input are not visible | All four preference sub-fields are hidden (not visible) in the default state |
 | 3 | Functional | Betting Preferences sub-fields appear after clicking "Configure" | Click the "Configure" button | The four preference sub-fields become visible; the button label changes to "Hide"; all 7 bookmaker checkboxes are checked; Default Bookmaker select shows `Bet365` selected with all 7 bookmakers as options in order (`Bet365`, `Betfair`, `BetUK`, `Ladbrokes`, `Paddy Power`, `SkyBet`, `William Hill`); Default Bet Type select shows `Player Prop` selected with all 6 options in order (`Accumulator`, `Bet Builder`, `Player Prop`, `Superboost`, `FT Result`, `Other`); Default Stake input shows `5` |
 | 4 | Functional | Unchecking a bookmaker removes it from the Default Bookmaker options | With preferences configured (Scenario 3 state), uncheck the `Betfair` checkbox | `Betfair` checkbox becomes unchecked; `Betfair` is removed from the Default Bookmaker select's option list; the remaining 6 bookmakers stay as options in their original order |
-| 5 | Functional | Last remaining bookmaker checkbox cannot be unchecked | With preferences configured, uncheck every bookmaker checkbox except one, then attempt to uncheck the final remaining checked bookmaker | The final checkbox remains checked; the Default Bookmaker select continues to show that one bookmaker as its only option |
+| 5 | Functional | Last remaining bookmaker checkbox cannot be unchecked | With preferences configured, uncheck every bookmaker checkbox except one | The final checkbox remains checked and becomes disabled (preventing any further attempt to uncheck it); the Default Bookmaker select continues to show that one bookmaker as its only option |
 | 6 | Functional | Password visibility toggle | On the signup form, fill the Password input with a value, then click the show/hide password toggle button | Password input's `type` changes from `password` to `text` (value becomes visible) and the button's `aria-label` changes from "Show password" to "Hide password"; clicking again reverts both to their original state |
 | 7 | Functional | Submit button disables and shows "Please wait..." while submitting | Fill in valid Name, Email, and Password values and click "Create Account" | Immediately after clicking, the submit button becomes disabled and its label changes to "Please wait..." until the signup request resolves |
 | 8 | Functional | Custom inline validation errors shown for empty required fields | Click "Create Account" with the Name, Email, and Password fields all empty | All three field-level errors become visible simultaneously: `name-error` reads "Name is required.", `email-error` reads "Email is required.", `password-error` reads "Password is required." (replacing the password helper text); each corresponding input has `aria-invalid="true"` and a red border; no `POST /api/auth/signup` request is sent |
@@ -84,7 +84,7 @@
   to be covered by its own dedicated UI test plan.
 - **Backend/API validation content** for signup (exact error messages, field
   constraints, duplicate-email handling, status codes) — covered by
-  `playwright/docs/test-plans/auth/test-plan-signup.md`. Scenario 13 only asserts that
+  `playwright/docs/test-plans/api/auth/test-plan-signup.md`. Scenario 13 only asserts that
   a server-side field error surfaces inline in the UI; it does not assert on every
   field/constraint combination the API can return — that full matrix belongs to the
   API test plan.
@@ -110,40 +110,45 @@
   reads `error?.response?.data?.error?.message` rather than the whole `error` object.
   Documented here for traceability only — no further action needed.
 
+- **Last remaining bookmaker checkbox visually toggled off despite staying enabled —
+  now fixed.** Discovered while automating Scenario 5: the checkbox's underlying state
+  correctly stayed enabled (Default Bookmaker kept showing it as the only option), but
+  its visible `checked` state briefly flipped to unchecked on click, since the guard
+  in `toggleSignupBookmaker` returned early without ever re-confirming the `:checked`
+  binding. Fixed by disabling the checkbox once it's the only bookmaker still enabled
+  (`:disabled="enabledBookmakers.length === 1 && enabledBookmakers.includes(bookmaker)"`),
+  which prevents the click (and the misleading visual flip) from occurring at all.
+  Scenario 5's Expected Result and its automated test now also assert the checkbox
+  becomes disabled.
+
 ## Automation Status
 
-No Playwright Page Object currently exists for `AuthView`. A `support/pages/AuthPage.ts`
-(or similar) page object needs to be created before any of the scenarios below can be
-automated, encapsulating the `data-test-id`-based locators listed in **Elements Under
-Test** above (e.g. `nameInput`, `nameError`, `emailInput`, `emailError`,
-`passwordInput`, `passwordError`, `passwordHelperText`, `authErrorMessage`,
-`toggleConfigureButton`, `bookmakerCheckbox(name)`, `defaultBookmakerSelect`,
-`defaultBetTypeSelect`, `defaultStakeInput`, `togglePasswordVisibilityButton`,
-`submitButton`, `toggleModeButton`).
+Automated by `support/pages/auth.page.ts` (`AuthPage`) and `support/pages/bets.page.ts`
+(`BetsPage`), orchestrated for the E2E scenarios via `support/journeys/signup.journey.ts`.
 
-| Scenario | Status |
-| --- | --- |
-| 1 | ❌ Not Automated |
-| 2 | ❌ Not Automated |
-| 3 | ❌ Not Automated |
-| 4 | ❌ Not Automated |
-| 5 | ❌ Not Automated |
-| 6 | ❌ Not Automated |
-| 7 | ❌ Not Automated |
-| 8 | ❌ Not Automated |
-| 9 | ❌ Not Automated |
-| 10 | ❌ Not Automated |
-| 11 | ❌ Not Automated |
-| 12 | ❌ Not Automated |
-| 13 | ❌ Not Automated |
-| 14 | ❌ Not Automated |
-| 15 | ❌ Not Automated |
-| 16 | ❌ Not Automated |
+| Scenario | Status | Spec file |
+| --- | --- | --- |
+| 1 | ✅ Automated | `tests/smoke/auth-signup.spec.ts` |
+| 2 | ✅ Automated | `tests/smoke/auth-signup.spec.ts` |
+| 3 | ✅ Automated | `tests/functional/auth-signup-preferences.spec.ts` |
+| 4 | ✅ Automated | `tests/functional/auth-signup-preferences.spec.ts` |
+| 5 | ✅ Automated | `tests/functional/auth-signup-preferences.spec.ts` |
+| 6 | ✅ Automated | `tests/functional/auth-signup-preferences.spec.ts` |
+| 7 | ✅ Automated | `tests/functional/auth-signup-validation.spec.ts` |
+| 8 | ✅ Automated | `tests/functional/auth-signup-validation.spec.ts` |
+| 9 | ✅ Automated | `tests/functional/auth-signup-validation.spec.ts` |
+| 10 | ✅ Automated | `tests/functional/auth-signup-validation.spec.ts` |
+| 11 | ✅ Automated | `tests/functional/auth-signup-validation.spec.ts` |
+| 12 | ✅ Automated | `tests/functional/auth-signup-validation.spec.ts` |
+| 13 | ✅ Automated | `tests/functional/auth-signup-validation.spec.ts` |
+| 14 | ✅ Automated | `tests/functional/auth-signup-validation.spec.ts` |
+| 15 | ✅ Automated | `tests/e2e/signup-journey.spec.ts` |
+| 16 | ✅ Automated | `tests/e2e/signup-journey.spec.ts` |
 
 ## References
 
 - Application source: `apps/web/src/views/AuthView.vue`
 - Auth store: `apps/web/src/stores/auth.ts`
 - Router guard: `apps/web/src/router/index.ts`
-- Related API test plan: `playwright/docs/test-plans/auth/test-plan-signup.md`
+- Related API test plan: `playwright/docs/test-plans/api/auth/test-plan-signup.md`
 

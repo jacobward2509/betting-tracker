@@ -12,7 +12,9 @@
       "@functions": ["support/functions/index.ts"],
       "@functions/*": ["support/functions/*"],
       "@seed-data/*": ["support/seed-data/*"],
-      "@schema-assertions/*": ["support/endpoint-schema-assertions/*"]
+      "@schema-assertions/*": ["support/endpoint-schema-assertions/*"],
+      "@pages/*": ["support/pages/*"],
+      "@journeys/*": ["support/journeys/*"]
     }
   },
   "include": ["**/*.ts"]
