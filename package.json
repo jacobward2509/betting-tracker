@@ -8,8 +8,7 @@
     "dev:web": "npm run dev --workspace=web",
     "dev:api": "npm run dev --workspace=api",
     "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
-    "build": "npm run build --workspaces",
-    "test:e2e": "playwright test"
+    "build": "npm run build --workspaces"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",

@@ -29,16 +29,16 @@ File path: `.ai/playwright-setup-state.json`
   "completed": [],
   "task": "Starting setup",
   "tasks": [
-    {"id": "package-json", "label": "package.json", "status": "pending"},
-    {"id": "tsconfig", "label": "tsconfig.json", "status": "pending"},
+    { "id": "package-json", "label": "package.json", "status": "pending" },
+    { "id": "tsconfig", "label": "tsconfig.json", "status": "pending" },
     {
       "id": "playwright-config",
       "label": "playwright.config.ts",
       "status": "pending"
     },
-    {"id": "gitignore", "label": ".gitignore", "status": "pending"},
-    {"id": "env-example", "label": ".env.example", "status": "pending"},
-    {"id": "ci-yml", "label": "api-test.gitlab-ci.yml", "status": "pending"},
+    { "id": "gitignore", "label": ".gitignore", "status": "pending" },
+    { "id": "env-example", "label": ".env.example", "status": "pending" },
+    { "id": "ci-yml", "label": "api-test.gitlab-ci.yml", "status": "pending" },
     {
       "id": "tests-folder",
       "label": "tests/ + setup + example spec",
@@ -65,9 +65,9 @@ File path: `.ai/playwright-setup-state.json`
       "status": "pending",
       "optional": true
     },
-    {"id": "scripts", "label": "scripts/", "status": "pending"},
-    {"id": "docs", "label": "docs/", "status": "pending"},
-    {"id": "npm-install", "label": "npm install", "status": "pending"}
+    { "id": "scripts", "label": "scripts/", "status": "pending" },
+    { "id": "docs", "label": "docs/", "status": "pending" },
+    { "id": "npm-install", "label": "npm install", "status": "pending" }
   ]
 }
 ```
@@ -157,20 +157,20 @@ Create `playwright/tsconfig.json`:
 Create `playwright/playwright.config.ts`:
 
 ```typescript
-import {defineConfig} from '@playwright/test'
-import dotenv from 'dotenv'
-import path from 'path'
+import { defineConfig } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'path';
 
-const env = process.env.ENV ?? 'sit'
-dotenv.config({path: path.resolve(__dirname, `.env.${env}`)})
+const env = process.env.ENV ?? 'sit';
+dotenv.config({ path: path.resolve(__dirname, `.env.${env}`) });
 
 function requireEnv(name: string): string {
-  const value = process.env[name]
-  if (!value) throw new Error(`Missing required environment variable: ${name}`)
-  return value
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
 }
 
-export const API_BASE_URL = requireEnv('API_BASE_URL')
+export const API_BASE_URL = requireEnv('API_BASE_URL');
 
 export default defineConfig({
   tsconfig: './tsconfig.json',
@@ -181,11 +181,11 @@ export default defineConfig({
   retries: 0,
   workers: process.env.CI ? 9 : 9,
 
-  reporter: [['html'], ['json', {outputFile: 'test-results/results.json'}]],
+  reporter: [['html'], ['json', { outputFile: 'test-results/results.json' }]],
 
   use: {
     video: process.env.CI ? 'retain-on-failure' : 'on',
-    trace: process.env.CI ? 'retain-on-failure' : 'on'
+    trace: process.env.CI ? 'retain-on-failure' : 'on',
   },
 
   projects: [
@@ -194,7 +194,7 @@ export default defineConfig({
     // -------------------
     {
       name: 'api-setup',
-      testMatch: /api\/setup\/api\.setup\.ts/
+      testMatch: /api\/setup\/api\.setup\.ts/,
     },
 
     // -------------------
@@ -205,11 +205,11 @@ export default defineConfig({
       testMatch: /api\/.*\.spec\.ts/,
       dependencies: ['api-setup'],
       use: {
-        baseURL: process.env.API_BASE_URL
-      }
-    }
-  ]
-})
+        baseURL: process.env.API_BASE_URL,
+      },
+    },
+  ],
+});
 ```
 
 ---
@@ -370,46 +370,49 @@ Create the following three files:
 **`playwright/tests/api/setup/api.setup.ts`** — copied verbatim from this repo's `playwright/tests/api/setup/api.setup.ts`:
 
 ```typescript
-import {expect, test as setup} from '@playwright/test'
-import fs from 'fs'
-import path from 'path'
+import { expect, test as setup } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
 interface TokenResponse {
-  access_token: string
+  access_token: string;
 }
 
-setup('authenticate', async ({request}) => {
-  const CLIENT_ID = process.env.TEST_CLIENT_ID!
-  const CLIENT_SECRET = process.env.TEST_CLIENT_SECRET!
-  const TOKEN_URL = process.env.TEST_ACCESS_TOKEN_URL!
-  const AUDIENCE = process.env.TEST_URL_AUTH!
+setup('authenticate', async ({ request }) => {
+  const CLIENT_ID = process.env.TEST_CLIENT_ID!;
+  const CLIENT_SECRET = process.env.TEST_CLIENT_SECRET!;
+  const TOKEN_URL = process.env.TEST_ACCESS_TOKEN_URL!;
+  const AUDIENCE = process.env.TEST_URL_AUTH!;
 
   const response = await request.post(TOKEN_URL, {
     form: {
       grant_type: 'client_credentials',
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
-      audience: AUDIENCE
-    }
-  })
+      audience: AUDIENCE,
+    },
+  });
 
-  expect(response.status()).toBe(200)
+  expect(response.status()).toBe(200);
 
-  const body = (await response.json()) as TokenResponse
+  const body = (await response.json()) as TokenResponse;
 
-  expect(typeof body.access_token).toBe('string')
+  expect(typeof body.access_token).toBe('string');
 
-  const authDir = path.join(process.cwd(), 'playwright/.auth')
-  fs.mkdirSync(authDir, {recursive: true})
-  fs.writeFileSync(path.join(authDir, 'api-token.json'), JSON.stringify({access_token: body.access_token}))
-})
+  const authDir = path.join(process.cwd(), 'playwright/.auth');
+  fs.mkdirSync(authDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(authDir, 'api-token.json'),
+    JSON.stringify({ access_token: body.access_token }),
+  );
+});
 ```
 
 **`playwright/tests/api/example-endpoints-v2.spec.ts`** — a minimal example spec showing the import pattern:
 
 ```typescript
-import {apiGet, assert401Schema} from '@functions/index'
-import {APIRequestContext, APIResponse, expect, test} from '@playwright/test'
+import { apiGet, assert401Schema } from '@functions/index';
+import { APIRequestContext, APIResponse, expect, test } from '@playwright/test';
 
 // TODO: Replace this file with your own spec files.
 // Each spec file covers one logical group of endpoints (e.g. customer-endpoints-v2.spec.ts).
@@ -417,31 +420,39 @@ import {APIRequestContext, APIResponse, expect, test} from '@playwright/test'
 
 test.describe('Example endpoints-V2', () => {
   test.describe('example-get-by-id', () => {
-    const URL_STUB = 'example/by-id'
+    const URL_STUB = 'example/by-id';
 
     test.describe('200 - Accepted', () => {
-      let response: APIResponse
+      let response: APIResponse;
       test.afterEach(async () => {
-        expect(response.status(), 'Request should return 200').toBe(200)
-      })
+        expect(response.status(), 'Request should return 200').toBe(200);
+      });
 
-      test('Valid request with all required parameters', async ({request}: {request: APIRequestContext}) => {
-        response = await apiGet(request, `${URL_STUB}/example-id`)
-      })
-    })
+      test('Valid request with all required parameters', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiGet(request, `${URL_STUB}/example-id`);
+      });
+    });
 
     test.describe('401 - Unauthorized', () => {
-      test('Request with no auth token returns 401', async ({request}: {request: APIRequestContext}) => {
+      test('Request with no auth token returns 401', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
         const response = await apiGet(request, `${URL_STUB}/example-id`, {
-          noAuth: true
-        })
-        expect(response.status(), 'Request should return 401').toBe(401)
-        const body = await response.json()
-        assert401Schema(body)
-      })
-    })
-  })
-})
+          noAuth: true,
+        });
+        expect(response.status(), 'Request should return 401').toBe(401);
+        const body = await response.json();
+        assert401Schema(body);
+      });
+    });
+  });
+});
 ```
 
 ---
@@ -453,42 +464,44 @@ Create the following three files verbatim:
 **`playwright/support/functions/index.ts`**
 
 ```typescript
-export * from './request-methods'
-export * from './schema_assertions'
+export * from './request-methods';
+export * from './schema_assertions';
 ```
 
 **`playwright/support/functions/request-methods.ts`**
 
 ```typescript
-import {APIRequestContext, APIResponse, test} from '@playwright/test'
-import fs from 'fs'
-import path from 'path'
+import { APIRequestContext, APIResponse, test } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
-type WithNoAuth<T> = T & {noAuth?: boolean}
+type WithNoAuth<T> = T & { noAuth?: boolean };
 
 // Attachments larger than this are truncated before being attached to the
 // test report, so a single oversized payload can't bloat the HTML report
 // (or, downstream, a Jira bug ticket built from it).
-const MAX_ATTACHMENT_BYTES = 10 * 1024 // 10KB
+const MAX_ATTACHMENT_BYTES = 10 * 1024; // 10KB
 
 function truncate(content: string): string {
   if (Buffer.byteLength(content, 'utf-8') <= MAX_ATTACHMENT_BYTES) {
-    return content
+    return content;
   }
 
-  const truncated = Buffer.from(content, 'utf-8').subarray(0, MAX_ATTACHMENT_BYTES).toString('utf-8')
+  const truncated = Buffer.from(content, 'utf-8')
+    .subarray(0, MAX_ATTACHMENT_BYTES)
+    .toString('utf-8');
 
-  return `${truncated}\n\n...[truncated — exceeded ${MAX_ATTACHMENT_BYTES / 1024}KB limit]`
+  return `${truncated}\n\n...[truncated — exceeded ${MAX_ATTACHMENT_BYTES / 1024}KB limit]`;
 }
 
 function stringifyBody(body: unknown): string | undefined {
-  if (body === undefined) return undefined
-  if (typeof body === 'string') return body
+  if (body === undefined) return undefined;
+  if (typeof body === 'string') return body;
 
   try {
-    return JSON.stringify(body, null, 2)
+    return JSON.stringify(body, null, 2);
   } catch {
-    return String(body)
+    return String(body);
   }
 }
 
@@ -506,31 +519,34 @@ async function attachRequestAndResponse(
   method: string,
   url: string,
   requestBody: unknown,
-  response: APIResponse
+  response: APIResponse,
 ): Promise<void> {
   try {
-    const testInfo = test.info()
+    const testInfo = test.info();
 
-    const requestContent = stringifyBody(requestBody)
+    const requestContent = stringifyBody(requestBody);
     if (requestContent !== undefined) {
       await testInfo.attach(`request-body (${method} ${url})`, {
         body: truncate(requestContent),
-        contentType: 'application/json'
-      })
+        contentType: 'application/json',
+      });
     }
 
-    let responseContent: string | undefined
+    let responseContent: string | undefined;
     try {
-      responseContent = await response.text()
+      responseContent = await response.text();
     } catch {
-      responseContent = undefined
+      responseContent = undefined;
     }
 
     if (responseContent !== undefined) {
-      await testInfo.attach(`response-body (${response.status()} ${method} ${url})`, {
-        body: truncate(responseContent),
-        contentType: 'application/json'
-      })
+      await testInfo.attach(
+        `response-body (${response.status()} ${method} ${url})`,
+        {
+          body: truncate(responseContent),
+          contentType: 'application/json',
+        },
+      );
     }
   } catch {
     // Not running inside a test, or attach() failed — never let capture
@@ -538,43 +554,46 @@ async function attachRequestAndResponse(
   }
 }
 
-let cachedToken: string | undefined
-let tokenLoaded = false
+let cachedToken: string | undefined;
+let tokenLoaded = false;
 
 function getAuthToken(): string | undefined {
-  if (tokenLoaded) return cachedToken
+  if (tokenLoaded) return cachedToken;
 
   try {
-    const tokenFilePath = path.join(process.cwd(), 'playwright/.auth/api-token.json')
-    const raw = fs.readFileSync(tokenFilePath, 'utf-8')
-    cachedToken = JSON.parse(raw).access_token
+    const tokenFilePath = path.join(
+      process.cwd(),
+      'playwright/.auth/api-token.json',
+    );
+    const raw = fs.readFileSync(tokenFilePath, 'utf-8');
+    cachedToken = JSON.parse(raw).access_token;
   } catch {
-    cachedToken = undefined
+    cachedToken = undefined;
   }
 
-  tokenLoaded = true
-  return cachedToken
+  tokenLoaded = true;
+  return cachedToken;
 }
 
-function withAuth<T extends {headers?: Record<string, string>}>(
-  options?: WithNoAuth<T>
-): Omit<T, 'noAuth'> & {headers: Record<string, string>} {
-  const {noAuth, ...rest} = options ?? ({} as WithNoAuth<T>)
+function withAuth<T extends { headers?: Record<string, string> }>(
+  options?: WithNoAuth<T>,
+): Omit<T, 'noAuth'> & { headers: Record<string, string> } {
+  const { noAuth, ...rest } = options ?? ({} as WithNoAuth<T>);
 
   if (noAuth) {
-    return rest as Omit<T, 'noAuth'> & {headers: Record<string, string>}
+    return rest as Omit<T, 'noAuth'> & { headers: Record<string, string> };
   }
 
-  const token = getAuthToken()
-  const authHeader = token ? {Authorization: `Bearer ${token}`} : {}
+  const token = getAuthToken();
+  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
   return {
     ...rest,
     headers: {
       ...authHeader,
-      ...(rest as T).headers
-    }
-  } as Omit<T, 'noAuth'> & {headers: Record<string, string>}
+      ...(rest as T).headers,
+    },
+  } as Omit<T, 'noAuth'> & { headers: Record<string, string> };
 }
 
 /**
@@ -583,82 +602,117 @@ function withAuth<T extends {headers?: Record<string, string>}>(
  * Only one of these is ever meaningfully set per-request in this codebase.
  */
 function extractRequestBody(options?: Record<string, unknown>): unknown {
-  if (!options) return undefined
-  return options.data ?? options.form ?? options.multipart ?? options.params
+  if (!options) return undefined;
+  return options.data ?? options.form ?? options.multipart ?? options.params;
 }
 
 export async function apiGet(
   request: APIRequestContext,
   url: string,
-  options?: WithNoAuth<Parameters<APIRequestContext['get']>[1]>
+  options?: WithNoAuth<Parameters<APIRequestContext['get']>[1]>,
 ): Promise<APIResponse> {
   try {
-    const response = await request.get(url, withAuth(options))
-    await attachRequestAndResponse('GET', url, extractRequestBody(options as Record<string, unknown>), response)
-    return response
+    const response = await request.get(url, withAuth(options));
+    await attachRequestAndResponse(
+      'GET',
+      url,
+      extractRequestBody(options as Record<string, unknown>),
+      response,
+    );
+    return response;
   } catch (err: unknown) {
-    const cause = err instanceof Error ? err.message : String(err)
-    throw new Error(`GET ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`)
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `GET ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`,
+    );
   }
 }
 
 export async function apiPost(
   request: APIRequestContext,
   url: string,
-  options?: WithNoAuth<Parameters<APIRequestContext['post']>[1]>
+  options?: WithNoAuth<Parameters<APIRequestContext['post']>[1]>,
 ): Promise<APIResponse> {
   try {
-    const response = await request.post(url, withAuth(options))
-    await attachRequestAndResponse('POST', url, extractRequestBody(options as Record<string, unknown>), response)
-    return response
+    const response = await request.post(url, withAuth(options));
+    await attachRequestAndResponse(
+      'POST',
+      url,
+      extractRequestBody(options as Record<string, unknown>),
+      response,
+    );
+    return response;
   } catch (err: unknown) {
-    const cause = err instanceof Error ? err.message : String(err)
-    throw new Error(`POST ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`)
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `POST ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`,
+    );
   }
 }
 
 export async function apiPatch(
   request: APIRequestContext,
   url: string,
-  options?: WithNoAuth<Parameters<APIRequestContext['patch']>[1]>
+  options?: WithNoAuth<Parameters<APIRequestContext['patch']>[1]>,
 ): Promise<APIResponse> {
   try {
-    const response = await request.patch(url, withAuth(options))
-    await attachRequestAndResponse('PATCH', url, extractRequestBody(options as Record<string, unknown>), response)
-    return response
+    const response = await request.patch(url, withAuth(options));
+    await attachRequestAndResponse(
+      'PATCH',
+      url,
+      extractRequestBody(options as Record<string, unknown>),
+      response,
+    );
+    return response;
   } catch (err: unknown) {
-    const cause = err instanceof Error ? err.message : String(err)
-    throw new Error(`PATCH ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`)
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `PATCH ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`,
+    );
   }
 }
 
 export async function apiPut(
   request: APIRequestContext,
   url: string,
-  options?: WithNoAuth<Parameters<APIRequestContext['put']>[1]>
+  options?: WithNoAuth<Parameters<APIRequestContext['put']>[1]>,
 ): Promise<APIResponse> {
   try {
-    const response = await request.put(url, withAuth(options))
-    await attachRequestAndResponse('PUT', url, extractRequestBody(options as Record<string, unknown>), response)
-    return response
+    const response = await request.put(url, withAuth(options));
+    await attachRequestAndResponse(
+      'PUT',
+      url,
+      extractRequestBody(options as Record<string, unknown>),
+      response,
+    );
+    return response;
   } catch (err: unknown) {
-    const cause = err instanceof Error ? err.message : String(err)
-    throw new Error(`PUT ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`)
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `PUT ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`,
+    );
   }
 }
 
 export async function apiDelete(
   request: APIRequestContext,
   url: string,
-  options?: WithNoAuth<Parameters<APIRequestContext['delete']>[1]>
+  options?: WithNoAuth<Parameters<APIRequestContext['delete']>[1]>,
 ): Promise<APIResponse> {
   try {
-    const response = await request.delete(url, withAuth(options))
-    await attachRequestAndResponse('DELETE', url, extractRequestBody(options as Record<string, unknown>), response)
-    return response
+    const response = await request.delete(url, withAuth(options));
+    await attachRequestAndResponse(
+      'DELETE',
+      url,
+      extractRequestBody(options as Record<string, unknown>),
+      response,
+    );
+    return response;
   } catch (err: unknown) {
-    const cause = err instanceof Error ? err.message : String(err)
-    throw new Error(`DELETE ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`)
+    const cause = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `DELETE ${url} failed at the network level — check connectivity/VPN. Cause: ${cause}`,
+    );
   }
 }
 ```
@@ -666,65 +720,87 @@ export async function apiDelete(
 **`playwright/support/functions/schema_assertions.ts`**
 
 ```typescript
-import {expect} from '@playwright/test'
+import { expect } from '@playwright/test';
 
 export function assert400Schema(data: unknown): void {
-  expect(data !== null && typeof data === 'object', 'Expect to be a object').toBe(true)
+  expect(
+    data !== null && typeof data === 'object',
+    'Expect to be a object',
+  ).toBe(true);
 
-  const obj = data as Record<string, unknown>
+  const obj = data as Record<string, unknown>;
 
   // Must have a 'details' string (both detailsOnly and standard error shapes)
-  expect(typeof obj['details'], 'Expect message to be a string').toBe('string')
+  expect(typeof obj['details'], 'Expect message to be a string').toBe('string');
 }
 
 export function assert401Schema(data: unknown): void {
-  expect(data !== null && typeof data === 'object', 'Expect to be a object').toBe(true)
+  expect(
+    data !== null && typeof data === 'object',
+    'Expect to be a object',
+  ).toBe(true);
 
-  const obj = data as Record<string, unknown>
+  const obj = data as Record<string, unknown>;
 
-  expect(typeof obj['message'], 'Expect message to be a string').toBe('string')
-  expect(obj.message, 'Expect message to be Unauthorized').toBe('Unauthorized')
+  expect(typeof obj['message'], 'Expect message to be a string').toBe('string');
+  expect(obj.message, 'Expect message to be Unauthorized').toBe('Unauthorized');
 }
 
 export function assert403Schema(data: unknown): void {
-  expect(data !== null && typeof data === 'object', 'Expect to be a object').toBe(true)
+  expect(
+    data !== null && typeof data === 'object',
+    'Expect to be a object',
+  ).toBe(true);
 
-  const obj = data as Record<string, unknown>
+  const obj = data as Record<string, unknown>;
 
   // Gateway explicit deny — either 'Message' or 'message' key
-  const hasMessage = typeof obj['Message'] === 'string' || typeof obj['message'] === 'string'
+  const hasMessage =
+    typeof obj['Message'] === 'string' || typeof obj['message'] === 'string';
 
-  expect(hasMessage, '403 response must contain a Message or message string').toBe(true)
+  expect(
+    hasMessage,
+    '403 response must contain a Message or message string',
+  ).toBe(true);
 }
 
 export function assert404Schema(data: unknown): void {
-  expect(data !== null && typeof data === 'object', 'Expect to be a object').toBe(true)
+  expect(
+    data !== null && typeof data === 'object',
+    'Expect to be a object',
+  ).toBe(true);
 
-  const obj = data as Record<string, unknown>
+  const obj = data as Record<string, unknown>;
 
-  expect(typeof obj['details'], 'Expect details to be a string').toBe('string')
-  expect(typeof obj['error'], 'Expect error to be a string').toBe('string')
-  expect(typeof obj['ts'], 'Expect ts to be a number').toBe('number')
+  expect(typeof obj['details'], 'Expect details to be a string').toBe('string');
+  expect(typeof obj['error'], 'Expect error to be a string').toBe('string');
+  expect(typeof obj['ts'], 'Expect ts to be a number').toBe('number');
 }
 
 export function assert422Schema(data: unknown): void {
-  expect(data !== null && typeof data === 'object', 'Expect to be a object').toBe(true)
+  expect(
+    data !== null && typeof data === 'object',
+    'Expect to be a object',
+  ).toBe(true);
 
-  const obj = data as Record<string, unknown>
+  const obj = data as Record<string, unknown>;
 
-  expect(typeof obj['details'], 'Expect details to be a string').toBe('string')
-  expect(typeof obj['error'], 'Expect error to be a string').toBe('string')
-  expect(typeof obj['ts'], 'Expect ts to be a number').toBe('number')
+  expect(typeof obj['details'], 'Expect details to be a string').toBe('string');
+  expect(typeof obj['error'], 'Expect error to be a string').toBe('string');
+  expect(typeof obj['ts'], 'Expect ts to be a number').toBe('number');
 }
 
 export function assert500Schema(data: unknown): void {
-  expect(data !== null && typeof data === 'object', 'Expect to be a object').toBe(true)
+  expect(
+    data !== null && typeof data === 'object',
+    'Expect to be a object',
+  ).toBe(true);
 
-  const obj = data as Record<string, unknown>
+  const obj = data as Record<string, unknown>;
 
-  expect(typeof obj['details'], 'Expect details to be a string').toBe('string')
-  expect(typeof obj['error'], 'Expect error to be a string').toBe('string')
-  expect(typeof obj['ts'], 'Expect ts to be a number').toBe('number')
+  expect(typeof obj['details'], 'Expect details to be a string').toBe('string');
+  expect(typeof obj['error'], 'Expect error to be a string').toBe('string');
+  expect(typeof obj['ts'], 'Expect ts to be a number').toBe('number');
 }
 ```
 
@@ -743,18 +819,18 @@ Create:
 // Example:
 
 export interface ExampleTestData {
-  readonly region: 'US' | 'CA'
-  readonly id: string
-  readonly nonExistentId: string
+  readonly region: 'US' | 'CA';
+  readonly id: string;
+  readonly nonExistentId: string;
 }
 
 export const EXAMPLE_DATA: readonly ExampleTestData[] = [
   {
     region: 'US',
     id: 'example-id-001',
-    nonExistentId: 'example-id-999'
-  }
-]
+    nonExistentId: 'example-id-999',
+  },
+];
 ```
 
 ---
@@ -811,7 +887,7 @@ Present the following message to the user, then wait for them to reply **"Okay"*
 >
 > - `playwright/docs/workflows/` — all workflow `.md` files
 > - `playwright/docs/api-test-scenarios.md`
-> - `playwright/docs/playwright-test-generation.md`
+> - `playwright/docs/playwright-api-test-generation.md`
 > - `playwright/docs/workflow-diagram.md`
 >
 > Reply **"Okay"** when you've noted this and I'll mark this task done.
