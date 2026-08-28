@@ -1,5 +1,6 @@
 import { Page } from '@playwright/test';
 import { AuthPage } from '@pages/auth.page';
+import { waitForResponse } from '@functions/index';
 
 export type SignupPreferences = {
   bookmakersToUncheck?: string[];
@@ -19,8 +20,15 @@ export type SignupDetails = {
  * navigates to `/auth`, switches to signup mode, optionally configures
  * Betting Preferences, and submits. Callers assert the resulting outcome
  * (e.g. navigation to `/bets`, or a resulting error) in the spec itself.
+ *
+ * Returns the bearer session token from the signup response (or undefined if
+ * the signup did not succeed), so callers can clean up the created account
+ * via DELETE /api/auth/me once the test is done with it.
  */
-export async function signUp(page: Page, { name, email, password, preferences }: SignupDetails) {
+export async function signUp(
+  page: Page,
+  { name, email, password, preferences }: SignupDetails,
+): Promise<string | undefined> {
   const authPage = new AuthPage(page);
   await authPage.goto();
   await authPage.toggleMode();
@@ -39,5 +47,13 @@ export async function signUp(page: Page, { name, email, password, preferences }:
     }
   }
 
+  // Register the listener BEFORE submit() triggers the signup request, so the
+  // response can't resolve before this listener attaches.
+  const signupResponsePromise = waitForResponse(page, 'POST', '/api/auth/signup');
   await authPage.submitSignupForm({ name, email, password });
+  const signupResponse = await signupResponsePromise;
+
+  if (signupResponse.status() !== 201) return undefined;
+  const body = await signupResponse.json();
+  return body.token as string;
 }

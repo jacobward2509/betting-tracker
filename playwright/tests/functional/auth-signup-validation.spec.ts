@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { AuthPage } from '@pages/auth.page';
 import { randomSignupEmail } from '@seed-data/auth/signup';
+import { deleteAccount, waitForResponse } from '@functions/index';
 
 const VALID_PASSWORD = 'a-valid-password-123';
 const VALID_NAME = 'Cline QA Test';
@@ -103,25 +104,35 @@ test.describe('Auth Signup - Server-Side Error Surfacing', () => {
     await authPage.toggleMode();
   });
 
-  test('Signing up with an email that already has an account shows a clean error message', async ({ page }) => {
+  test('Signing up with an email that already has an account shows a clean error message', async ({ page, request }) => {
     const authPage = new AuthPage(page);
     const email = randomSignupEmail();
 
     // Create the account once so the second attempt below is a genuine duplicate.
+    // Register the listener BEFORE submit() triggers the signup request, so the
+    // response can't resolve before this listener attaches.
+    const signupResponsePromise = waitForResponse(page, 'POST', '/api/auth/signup');
     await authPage.submitSignupForm({ name: VALID_NAME, email, password: VALID_PASSWORD });
+    const signupResponse = await signupResponsePromise;
+    const { token } = await signupResponse.json();
+
     await expect(page, 'First signup should succeed and navigate to /bets').toHaveURL(/\/bets/);
 
-    // Clear the session from the first signup so the guestOnly route guard doesn't
-    // redirect straight back to /bets on the next /auth visit.
-    await page.evaluate(() => localStorage.clear());
-    await authPage.goto();
-    await authPage.toggleMode();
-    await authPage.submitSignupForm({ name: VALID_NAME, email, password: VALID_PASSWORD });
+    try {
+      // Clear the session from the first signup so the guestOnly route guard doesn't
+      // redirect straight back to /bets on the next /auth visit.
+      await page.evaluate(() => localStorage.clear());
+      await authPage.goto();
+      await authPage.toggleMode();
+      await authPage.submitSignupForm({ name: VALID_NAME, email, password: VALID_PASSWORD });
 
-    await expect(
-      authPage.authErrorMessage,
-      'Auth error message should read the clean duplicate-account message',
-    ).toHaveText('An account with this email already exists.');
+      await expect(
+        authPage.authErrorMessage,
+        'Auth error message should read the clean duplicate-account message',
+      ).toHaveText('An account with this email already exists.');
+    } finally {
+      await deleteAccount(request, token);
+    }
   });
 
   test('A Name that fails only server-side validation surfaces the field error inline', async ({ page }) => {
@@ -144,7 +155,10 @@ test.describe('Auth Signup - Server-Side Error Surfacing', () => {
 
 
 test.describe('Auth Signup - Submission State', () => {
-  test('Submit button disables and shows "Please wait..." while the signup request is in flight', async ({ page }) => {
+  test('Submit button disables and shows "Please wait..." while the signup request is in flight', async ({
+    page,
+    request,
+  }) => {
     const authPage = new AuthPage(page);
     await authPage.goto();
     await authPage.toggleMode();
@@ -159,12 +173,19 @@ test.describe('Auth Signup - Submission State', () => {
       await route.continue();
     });
 
+    // Register the listener BEFORE submit() triggers the signup request, so the
+    // response can't resolve before this listener attaches.
+    const signupResponsePromise = waitForResponse(page, 'POST', '/api/auth/signup');
     await authPage.submit();
 
     await expect(authPage.submitButton, 'Submit button should show "Please wait..." while submitting').toHaveText(
       'Please wait...',
     );
     await expect(authPage.submitButton, 'Submit button should be disabled while submitting').toBeDisabled();
+
+    const signupResponse = await signupResponsePromise;
+    const { token } = await signupResponse.json();
+    await deleteAccount(request, token);
   });
 });
 

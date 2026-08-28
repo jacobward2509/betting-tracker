@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { BetsPage } from '@pages/bets.page';
 import { logIn } from '@journeys/login.journey';
-import { apiPost } from '@functions/index';
+import { apiPost, deleteAccount } from '@functions/index';
 import { maximumSignupBody } from '@seed-data/auth/signup';
 
 test.describe('Login Journey', () => {
@@ -16,10 +16,15 @@ test.describe('Login Journey', () => {
       noAuth: true,
     });
     expect(seedResponse.status(), 'Seed signup request should return 201').toBe(201);
+    const { token } = await seedResponse.json();
 
-    await logIn(page, { email: signupBody.email, password: signupBody.password });
+    try {
+      await logIn(page, { email: signupBody.email, password: signupBody.password });
 
-    const betsPage = new BetsPage(page);
-    await betsPage.expectLoaded();
+      const betsPage = new BetsPage(page);
+      await betsPage.expectLoaded();
+    } finally {
+      await deleteAccount(request, token);
+    }
   });
 });

@@ -3,9 +3,9 @@ info:
   title: Betting Tracker API — Auth
   description: >
     Authentication endpoints for the Betting Tracker API. This document currently
-    covers signup and login only, as part of an iterative backend refactor. Additional
-    endpoints (bets, bookmakers, user config) will be documented in subsequent
-    iterations.
+    covers signup, login, and the current-user account endpoints (get/delete) only,
+    as part of an iterative backend refactor. Additional endpoints (bets, bookmakers,
+    user config) will be documented in subsequent iterations.
   version: 1.0.0
 servers:
   - url: http://localhost:3000
@@ -98,6 +98,52 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get the current authenticated user
+      description: >
+        Returns the account details for the user identified by the bearer session
+        token.
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401':
+          description: Missing, invalid, or expired session token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Auth]
+      summary: Delete the current authenticated user's account
+      description: >
+        Permanently deletes the account identified by the bearer session token,
+        along with all data owned by it (sessions, bookmaker/bet-type preferences,
+        and bets) via cascading deletes. This action cannot be undone.
+      operationId: deleteCurrentAccount
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Account deleted successfully. No response body.
+        '401':
+          description: Missing, invalid, or expired session token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
 
 components:
@@ -177,6 +223,14 @@ components:
         token:
           type: string
           description: "Opaque bearer session token. Send as `Authorization: Bearer <token>`."
+        user:
+          $ref: '#/components/schemas/AuthUser'
+
+    CurrentUserResponse:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
         user:
           $ref: '#/components/schemas/AuthUser'
 

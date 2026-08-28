@@ -1,4 +1,4 @@
-import {apiGet, apiPost} from '@functions/index'
+import {apiGet, apiPost, appendSeededUser} from '@functions/index'
 import {assertErrorResponseSchema, assertLoginSchema, assertSignupSchema} from '@schema-assertions/auth'
 import {
   maximumLoginBody,
@@ -22,11 +22,27 @@ test.describe('Auth endpoints-V2', () => {
     })
 
     test.describe('201 - Accepted', () => {
+      // Serial: both tests in this block append to the shared
+      // seeded-users.json dynamic test data file via appendSeededUser() —
+      // running serially avoids concurrent writes without needing file
+      // locking.
+      test.describe.configure({ mode: 'serial' })
+
       let response: APIResponse
       test.afterEach(async () => {
         expect(response.status(), 'Request should return 201').toBe(201)
         const body = await response.json()
         assertSignupSchema(body)
+
+        // Record the seeded account for the dedicated DELETE /api/auth/me test
+        // suite to consume and clean up later — cleanup is intentionally
+        // deferred there, not performed in this suite.
+        appendSeededUser({
+          email: requestBody.email,
+          password: requestBody.password,
+          token: body.token,
+          userId: body.user.id
+        })
       })
 
       test('Valid request with all fields', async ({request}: {request: APIRequestContext}) => {

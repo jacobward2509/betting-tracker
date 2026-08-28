@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { AuthPage } from '@pages/auth.page';
 import { signUp } from '@journeys/signup.journey';
 import { randomSignupEmail } from '@seed-data/auth/signup';
+import { deleteAccount } from '@functions/index';
 
 const VALID_PASSWORD = 'a-valid-password-123';
 const VALID_NAME = 'Cline QA Test';
@@ -26,22 +27,27 @@ test.describe('Auth Login - Invalid Credentials', () => {
 
   test('A registered email with the wrong password shows the exact same error as an unknown email', async ({
     page,
+    request,
   }) => {
     const email = randomSignupEmail();
 
     // Seed a known-good account via the signup journey, then sign back out so
     // the guestOnly route guard doesn't redirect straight back to /bets.
-    await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
+    const token = await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
     await page.evaluate(() => localStorage.clear());
 
-    const authPage = new AuthPage(page);
-    await authPage.goto();
-    await authPage.submitLoginForm({ email, password: 'a-completely-wrong-password' });
+    try {
+      const authPage = new AuthPage(page);
+      await authPage.goto();
+      await authPage.submitLoginForm({ email, password: 'a-completely-wrong-password' });
 
-    await expect(
-      authPage.authErrorMessage,
-      'Auth error message for wrong password should read the same generic message as an unknown email',
-    ).toHaveText('Invalid email or password.');
+      await expect(
+        authPage.authErrorMessage,
+        'Auth error message for wrong password should read the same generic message as an unknown email',
+      ).toHaveText('Invalid email or password.');
+    } finally {
+      if (token) await deleteAccount(request, token);
+    }
   });
 });
 

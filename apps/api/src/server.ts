@@ -511,6 +511,15 @@ app.get('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) => {
   res.json({ user: req.user });
 });
 
+app.delete('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) => {
+  // Deleting the User row cascades to Session, UserBookmaker, UserPreference, and
+  // Bet rows (all onDelete: Cascade in schema.prisma) — fully removes the account
+  // and everything it created. Used to clean up accounts seeded by the Playwright
+  // API and UI suites.
+  await prisma.user.delete({ where: { id: req.user!.id } });
+  res.sendStatus(204);
+});
+
 app.patch('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) => {
   const name = normalizeName(req.body?.name);
   if (name.length < 2) {
