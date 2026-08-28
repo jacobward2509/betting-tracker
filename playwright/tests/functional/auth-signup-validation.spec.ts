@@ -98,13 +98,20 @@ test.describe('Auth Signup - Field Validation', () => {
 });
 
 test.describe('Auth Signup - Server-Side Error Surfacing', () => {
+  let token: string | undefined;
+
   test.beforeEach(async ({ page }) => {
     const authPage = new AuthPage(page);
     await authPage.goto();
     await authPage.toggleMode();
   });
 
-  test('Signing up with an email that already has an account shows a clean error message', async ({ page, request }) => {
+  test.afterEach(async ({ request }) => {
+    if (token) await deleteAccount(request, token);
+    token = undefined;
+  });
+
+  test('Signing up with an email that already has an account shows a clean error message', async ({ page }) => {
     const authPage = new AuthPage(page);
     const email = randomSignupEmail();
 
@@ -114,25 +121,21 @@ test.describe('Auth Signup - Server-Side Error Surfacing', () => {
     const signupResponsePromise = waitForResponse(page, 'POST', '/api/auth/signup');
     await authPage.submitSignupForm({ name: VALID_NAME, email, password: VALID_PASSWORD });
     const signupResponse = await signupResponsePromise;
-    const { token } = await signupResponse.json();
+    ({ token } = await signupResponse.json());
 
     await expect(page, 'First signup should succeed and navigate to /bets').toHaveURL(/\/bets/);
 
-    try {
-      // Clear the session from the first signup so the guestOnly route guard doesn't
-      // redirect straight back to /bets on the next /auth visit.
-      await page.evaluate(() => localStorage.clear());
-      await authPage.goto();
-      await authPage.toggleMode();
-      await authPage.submitSignupForm({ name: VALID_NAME, email, password: VALID_PASSWORD });
+    // Clear the session from the first signup so the guestOnly route guard doesn't
+    // redirect straight back to /bets on the next /auth visit.
+    await page.evaluate(() => localStorage.clear());
+    await authPage.goto();
+    await authPage.toggleMode();
+    await authPage.submitSignupForm({ name: VALID_NAME, email, password: VALID_PASSWORD });
 
-      await expect(
-        authPage.authErrorMessage,
-        'Auth error message should read the clean duplicate-account message',
-      ).toHaveText('An account with this email already exists.');
-    } finally {
-      await deleteAccount(request, token);
-    }
+    await expect(
+      authPage.authErrorMessage,
+      'Auth error message should read the clean duplicate-account message',
+    ).toHaveText('An account with this email already exists.');
   });
 
   test('A Name that fails only server-side validation surfaces the field error inline', async ({ page }) => {
@@ -155,9 +158,15 @@ test.describe('Auth Signup - Server-Side Error Surfacing', () => {
 
 
 test.describe('Auth Signup - Submission State', () => {
+  let token: string | undefined;
+
+  test.afterEach(async ({ request }) => {
+    if (token) await deleteAccount(request, token);
+    token = undefined;
+  });
+
   test('Submit button disables and shows "Please wait..." while the signup request is in flight', async ({
     page,
-    request,
   }) => {
     const authPage = new AuthPage(page);
     await authPage.goto();
@@ -184,8 +193,7 @@ test.describe('Auth Signup - Submission State', () => {
     await expect(authPage.submitButton, 'Submit button should be disabled while submitting').toBeDisabled();
 
     const signupResponse = await signupResponsePromise;
-    const { token } = await signupResponse.json();
-    await deleteAccount(request, token);
+    ({ token } = await signupResponse.json());
   });
 });
 

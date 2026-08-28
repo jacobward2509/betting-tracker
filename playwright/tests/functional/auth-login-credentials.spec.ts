@@ -8,9 +8,16 @@ const VALID_PASSWORD = 'a-valid-password-123';
 const VALID_NAME = 'Cline QA Test';
 
 test.describe('Auth Login - Invalid Credentials', () => {
+  let token: string | undefined;
+
   test.beforeEach(async ({ page }) => {
     const authPage = new AuthPage(page);
     await authPage.goto();
+  });
+
+  test.afterEach(async ({ request }) => {
+    if (token) await deleteAccount(request, token);
+    token = undefined;
   });
 
   test('An unknown email shows a generic "Invalid email or password." error', async ({ page }) => {
@@ -27,27 +34,22 @@ test.describe('Auth Login - Invalid Credentials', () => {
 
   test('A registered email with the wrong password shows the exact same error as an unknown email', async ({
     page,
-    request,
   }) => {
     const email = randomSignupEmail();
 
     // Seed a known-good account via the signup journey, then sign back out so
     // the guestOnly route guard doesn't redirect straight back to /bets.
-    const token = await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
+    token = await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
     await page.evaluate(() => localStorage.clear());
 
-    try {
-      const authPage = new AuthPage(page);
-      await authPage.goto();
-      await authPage.submitLoginForm({ email, password: 'a-completely-wrong-password' });
+    const authPage = new AuthPage(page);
+    await authPage.goto();
+    await authPage.submitLoginForm({ email, password: 'a-completely-wrong-password' });
 
-      await expect(
-        authPage.authErrorMessage,
-        'Auth error message for wrong password should read the same generic message as an unknown email',
-      ).toHaveText('Invalid email or password.');
-    } finally {
-      if (token) await deleteAccount(request, token);
-    }
+    await expect(
+      authPage.authErrorMessage,
+      'Auth error message for wrong password should read the same generic message as an unknown email',
+    ).toHaveText('Invalid email or password.');
   });
 });
 
