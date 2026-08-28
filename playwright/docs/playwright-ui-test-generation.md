@@ -331,6 +331,25 @@ test.beforeEach(async ({ page }) => {
 
 Once `ui-setup` is introduced, these `beforeEach` navigation steps are removed and replaced by the saved `storageState`.
 
+### Opting Out of `storageState` for Auth-Flow Specs
+
+Once `ui-setup` is wired up as the project-level default, **any spec whose purpose is to exercise the unauthenticated → authenticated transition itself (login, signup, logout) must explicitly start from a logged-out state**, regardless of what the project's default `storageState` provides. Otherwise the setup project's saved session leaks into the test and the very flow under test never actually runs from a logged-out starting point.
+
+Override this at the top of the spec file with `test.use()`, passing an empty storage state:
+
+```typescript
+// This suite exercises the unauthenticated → authenticated login flow itself,
+// so it must always start logged out regardless of the project's default
+// storageState.
+test.use({ storageState: { cookies: [], origins: [] } });
+
+test.describe('Login Page', () => {
+  // ...
+});
+```
+
+This applies to every Smoke, Functional, and E2E spec that drives a login or signup form as part of what it's testing — not just E2E journeys. A page that merely happens to require being logged in to reach it (e.g. a settings page reached only once authenticated) should NOT do this — it should rely on the default `storageState` from `ui-setup` instead.
+
 ---
 
 
@@ -725,29 +744,34 @@ Always register the `waitForResponse` listener **before** the action that trigge
 
 ### Seeding and Cleaning Up via API
 
-For tests that need pre-existing data (e.g. an edit flow that requires an existing record), seed that data via the application's create endpoint directly through Playwright's `request` fixture, rather than driving the UI through a create flow first. Clean up via the corresponding delete endpoint in `test.afterEach`, so seeded data doesn't leak between runs or environments regardless of test outcome:
+For tests that need pre-existing data (e.g. an edit flow that requires an existing record, or an account that must exist before a login flow can be exercised), seed that data via the application's create endpoint directly through Playwright's `request` fixture, rather than driving the UI through a create flow first.
+
+**When only some tests in a `describe` block create data, don't force a shared `beforeEach`/`afterEach`.** Instead, declare the identifier at `describe` scope, let each test assign it only if/when it actually creates the record, and clean up conditionally in `afterEach` so tests that never created anything don't attempt (and fail) a cleanup call:
 
 ```typescript
 test.describe('Edit Existing Customer', () => {
-  let customerId: string;
-
-  test.beforeEach(async ({ request }) => {
-    // TODO: replace with the real create-customer endpoint and payload shape for this app
-    const response = await request.post('/api/TODO-create-endpoint', { data: { /* TODO: seed payload */ } });
-    const body = await response.json();
-    customerId = body.id;
-  });
+  let customerId: string | undefined;
 
   test.afterEach(async ({ request }) => {
-    // TODO: replace with the real delete-customer endpoint for this app
-    await request.delete(`/api/TODO-delete-endpoint/${customerId}`);
+    // Cleans up regardless of test outcome (pass or fail) — only if this
+    // particular test actually created a record.
+    if (customerId) await request.delete(`/api/customers/${customerId}`);
+    customerId = undefined;
   });
 
-  test('User can edit an existing customer\'s details', async ({ page }) => {
-    // ... test uses customerId to navigate to the seeded record
+  test('User can edit an existing customer\'s details', async ({ page, request }) => {
+    const response = await request.post('/api/customers', { data: { /* seed payload */ } });
+    const body = await response.json();
+    customerId = body.id;
+
+    // ... test drives the UI using customerId to navigate to the seeded record
   });
 });
 ```
+
+If every test in the block creates the same kind of record, a shared `test.beforeEach` to seed it is fine — the conditional-`afterEach` pattern above specifically matters once only *some* tests in the block create data (e.g. a suite that mixes "starts from a fresh account" tests with pure client-side validation tests that never hit the network).
+
+This pattern is what backs the "opt out of `storageState`" login/signup specs from [Section 4](#opting-out-of-storagestate-for-auth-flow-specs) — a test that drives a real signup or login submission captures whatever identifier the create/seed response returns (a token, an ID, etc.) into the describe-scoped variable, and `afterEach` deletes it via the corresponding delete endpoint so seeded data never leaks between runs or environments, however the test ends.
 
 **This section is intentionally a placeholder pattern.** The exact create/delete endpoint paths, payload shapes, and any auth requirements differ per entity and per app. Before writing a real seeding helper for a given entity, confirm the endpoint details with the API owner or the relevant Postman collection/API docs — do not guess at payload shapes.
 

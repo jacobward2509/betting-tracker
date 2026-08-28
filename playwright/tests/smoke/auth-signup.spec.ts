@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { AuthPage } from '@pages/auth.page';
 
+// This suite exercises the unauthenticated → authenticated signup flow
+// itself, so it must always start logged out regardless of the project's
+// default storageState (see playwright-ui-test-generation.md §4).
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Auth Signup Page', () => {
   test.beforeEach(async ({ page }) => {
     const authPage = new AuthPage(page);
@@ -8,38 +13,53 @@ test.describe('Auth Signup Page', () => {
     await authPage.toggleMode();
   });
 
-  test('Cosmetic - signup form renders with correct heading, labels, and default field states', async ({ page }) => {
+  test('Cosmetic - page loads with heading and preferences section visible', async ({ page }) => {
     const authPage = new AuthPage(page);
     await authPage.expectLoaded();
+  });
 
-    await expect(authPage.authHeading, 'Auth heading should be visible').toBeVisible();
+  test('Cosmetic - Heading renders with correct text for signup mode', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectHeadingCosmeticElements();
+
     await expect(authPage.authHeading, 'Auth heading should read "Create Account"').toHaveText('Create Account');
     await expect(authPage.authSubtext, 'Auth subtext should read "Start tracking your bets."').toHaveText(
       'Start tracking your bets.',
     );
+  });
 
-    await expect(authPage.nameLabel, 'Name label should be visible').toBeVisible();
-    await expect(authPage.nameLabel, 'Name label should read "Name"').toHaveText('Name');
-    await expect(authPage.nameInput, 'Name input should be empty by default').toBeEmpty();
-    await expect(authPage.nameError, 'Name error should be hidden by default').toBeHidden();
+  test('Cosmetic - Name field renders with correct label and default state', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectNameFieldCosmeticElements();
+  });
 
-    await expect(authPage.emailLabel, 'Email label should read "Email"').toHaveText('Email');
-    await expect(authPage.emailInput, 'Email input should be empty by default').toBeEmpty();
-    await expect(authPage.emailError, 'Email error should be hidden by default').toBeHidden();
+  test('Cosmetic - Email field renders with correct label and default state', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectEmailFieldCosmeticElements();
+  });
 
-    await expect(authPage.passwordLabel, 'Password label should read "Password"').toHaveText('Password');
-    await expect(authPage.passwordInput, 'Password input should be empty by default').toBeEmpty();
-    await expect(authPage.passwordError, 'Password error should be hidden by default').toBeHidden();
+  test('Cosmetic - Password field renders with correct label, helper text, and default state for signup mode', async ({
+    page,
+  }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectPasswordFieldCosmeticElements();
+
     await expect(
       authPage.passwordHelperText,
       `Password helper text should read "Minimum ${AuthPage.SIGNUP_PASSWORD_MIN_LENGTH} characters."`,
     ).toHaveText(`Minimum ${AuthPage.SIGNUP_PASSWORD_MIN_LENGTH} characters.`);
+  });
 
-    await expect(authPage.submitButton, 'Submit button should be visible').toBeVisible();
+  test('Cosmetic - Submit button renders with correct text for signup mode', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectSubmitButtonCosmeticElements();
+
     await expect(authPage.submitButton, 'Submit button should read "Create Account"').toHaveText('Create Account');
-    await expect(authPage.submitButton, 'Submit button should be enabled').toBeEnabled();
+  });
 
-    await expect(authPage.authErrorMessage, 'Auth error message should be hidden by default').toBeHidden();
+  test('Cosmetic - Auth error message is hidden by default', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectAuthErrorMessageCosmeticElements();
   });
 
   test('Cosmetic - Betting Preferences section renders collapsed with its footer note visible', async ({ page }) => {

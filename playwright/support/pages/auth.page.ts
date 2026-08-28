@@ -180,4 +180,68 @@ export class AuthPage {
     await expect(this.page, 'Auth page URL should be /auth').toHaveURL(/\/auth/);
     await expect(this.authForm, 'Auth form should be visible').toBeVisible();
   }
+
+  /** Cosmetic check for the heading/subtext component only. Exact wording differs per mode and is asserted by the caller. */
+  async expectHeadingCosmeticElements() {
+    await expect(this.authHeading, 'Auth heading should be visible').toBeVisible();
+    await expect(this.authSubtext, 'Auth subtext should be visible').toBeVisible();
+  }
+
+  /** Cosmetic check for the Name field component only (signup mode). */
+  async expectNameFieldCosmeticElements() {
+    await expect(this.nameLabel, 'Name label should be visible').toBeVisible();
+    await expect(this.nameLabel, 'Name label should read "Name"').toHaveText('Name');
+    await expect(this.nameInput, 'Name input should be empty by default').toBeEmpty();
+    await expect(this.nameError, 'Name error should be hidden by default').toBeHidden();
+  }
+
+  /** Cosmetic check for the Email field component only. */
+  async expectEmailFieldCosmeticElements() {
+    await expect(this.emailLabel, 'Email label should read "Email"').toHaveText('Email');
+    await expect(this.emailInput, 'Email input should be empty by default').toBeEmpty();
+    await expect(this.emailInput, 'Email input should have no placeholder attribute').not.toHaveAttribute(
+      'placeholder',
+    );
+    await expect(this.emailError, 'Email error should be hidden by default').toBeHidden();
+  }
+
+  /** Cosmetic check for the Password field component only. Signup mode's helper text is asserted separately by the caller. */
+  async expectPasswordFieldCosmeticElements() {
+    await expect(this.passwordLabel, 'Password label should read "Password"').toHaveText('Password');
+    await expect(this.passwordInput, 'Password input should be empty by default').toBeEmpty();
+    await expect(this.passwordInput, 'Password input should have no placeholder attribute').not.toHaveAttribute(
+      'placeholder',
+    );
+    await expect(this.passwordError, 'Password error should be hidden by default').toBeHidden();
+  }
+
+  /** Cosmetic check for the Submit button component only. Exact wording differs per mode and is asserted by the caller. */
+  async expectSubmitButtonCosmeticElements() {
+    await expect(this.submitButton, 'Submit button should be visible').toBeVisible();
+    await expect(this.submitButton, 'Submit button should be enabled').toBeEnabled();
+  }
+
+  /** Cosmetic check for the mode-toggle button component only. `expectedText` differs between login and signup mode. */
+  async expectToggleModeButtonCosmeticElements(expectedText: string) {
+    await expect(this.toggleModeButton, 'Mode toggle button should be visible').toBeVisible();
+    await expect(this.toggleModeButton, `Mode toggle button should read "${expectedText}"`).toHaveText(expectedText);
+  }
+
+  /** Cosmetic check for the Auth error message component only. */
+  async expectAuthErrorMessageCosmeticElements() {
+    await expect(this.authErrorMessage, 'Auth error message should be hidden by default').toBeHidden();
+  }
+
+  /** Cosmetic check confirming signup-only elements are absent from the DOM while in login mode. */
+  async expectSignupOnlyElementsAbsentInLoginMode() {
+    await expect(this.nameInput, 'Name input should not be present in the DOM in login mode').toHaveCount(0);
+    await expect(
+      this.preferencesHeading,
+      'Betting Preferences heading should not be present in the DOM in login mode',
+    ).toHaveCount(0);
+    await expect(
+      this.passwordHelperText,
+      'Password helper text should not be present in the DOM in login mode',
+    ).toHaveCount(0);
+  }
 }

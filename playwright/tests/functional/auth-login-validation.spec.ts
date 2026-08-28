@@ -3,6 +3,10 @@ import { AuthPage } from '@pages/auth.page';
 
 const VALID_PASSWORD = 'a-valid-password-123';
 
+// This suite exercises the unauthenticated → authenticated login flow itself,
+// so it must always start logged out regardless of the project's default
+// storageState (see playwright-ui-test-generation.md §4).
+test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('Auth Login - Field Validation', () => {
   test.beforeEach(async ({ page }) => {

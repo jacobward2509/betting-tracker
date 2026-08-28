@@ -861,12 +861,13 @@ expect(body).toHaveProperty('details')
 
 ### Sources of Variables
 
-Variables in a spec file come from two sources:
+Variables in a spec file come from three sources:
 
 | Source                                                     | Example                                                        |
 | ---------------------------------------------------------- | -------------------------------------------------------------- |
 | `.env.<ENV>` file (indirectly, via `playwright.config.ts`) | `API_BASE_URL` (auth vars are consumed only by `api.setup.ts`) |
 | Seed data array (destructured)                             | `region`, `country`, `locationID`, etc.                        |
+| Dynamic, same-run file (see [below](#dynamic-same-run-variables-cross-test-data-passing)) | A token/ID produced by an earlier test and read back by a later one |
 
 ### Static Variables (.env.<ENV> file, guarded by playwright.config.ts)
 
@@ -963,6 +964,44 @@ test.describe('insert-warehouse-purchase-order', () => {
 ```
 
 Because `beforeEach` resets `requestBody` before every test, mutations in one test never affect another.
+
+### Dynamic, Same-Run Variables (Cross-Test Data Passing)
+
+Some scenarios need data produced by one test to be consumed by a *later* test in the same run — most commonly a token or ID returned from a resource-creating request (e.g. a signup/login response), which a subsequent test then needs in order to validate that resource (a follow-up `GET` on it) or to perform other operations against it.
+
+This is a **same-run, per-execution mechanism** — distinct from the static seed-data array covered above, which is fixed, typed, and known ahead of time. The pattern:
+
+1. The producing test writes the value(s) it generated to a shared file on disk (e.g. under a dedicated dynamic-data directory), rather than trying to share an in-memory variable across tests.
+2. The consuming test reads that file back and parses out the value(s) it needs.
+3. The `describe` block containing both tests must use `test.describe.configure({ mode: 'serial' })`, so the producing test is guaranteed to run — and finish writing the file — before the consuming test tries to read it. Without serial mode, Playwright's default parallel execution could run the consuming test first, or have two tests write to the same file concurrently and corrupt each other's data.
+
+```typescript
+test.describe('200 - Accepted', () => {
+  // Serial: the first test writes its response to a shared dynamic-data file,
+  // and the second test reads it back — running serially avoids concurrent
+  // writes without needing file locking.
+  test.describe.configure({ mode: 'serial' });
+
+  test('Valid request with all fields', async ({ request }: { request: APIRequestContext }) => {
+    response = await apiPost(request, URL_STUB, { data: requestBody, noAuth: true });
+    const body = await response.json();
+
+    // Write whatever the follow-up test needs (e.g. a token/ID) to a shared file
+    fs.writeFileSync('support/dynamic-test-data/my-variables.json', JSON.stringify({ token: body.token }));
+  });
+
+  test('Validate via a follow-up GET request', async ({ request }: { request: APIRequestContext }) => {
+    const dynamicVars = JSON.parse(fs.readFileSync('support/dynamic-test-data/my-variables.json', 'utf-8'));
+
+    response = await apiGet(request, 'my-resource/me', {
+      headers: { Authorization: `Bearer ${dynamicVars.token}` },
+      noAuth: true,
+    });
+  });
+});
+```
+
+Only reach for this when a test genuinely needs a value that can only be produced by actually running another test first (e.g. a real signup response's token). If the value could instead come from static seed data or from a setup/fixture step, prefer that instead — this pattern adds ordering coupling between tests and should stay the exception, not the default.
 
 ### URL Construction
 

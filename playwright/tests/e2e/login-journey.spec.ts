@@ -4,6 +4,11 @@ import { logIn } from '@journeys/login.journey';
 import { apiPost, deleteAccount } from '@functions/index';
 import { maximumSignupBody } from '@seed-data/auth/signup';
 
+// This journey exercises the unauthenticated → authenticated login flow
+// itself, so it must always start logged out regardless of the project's
+// default storageState (see playwright-ui-test-generation.md §4).
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Login Journey', () => {
   let token: string | undefined;
 

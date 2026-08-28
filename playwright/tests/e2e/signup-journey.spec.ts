@@ -7,8 +7,12 @@ import { deleteAccount } from '@functions/index';
 const VALID_PASSWORD = 'a-valid-password-123';
 const VALID_NAME = 'Cline QA Test';
 
+// This journey exercises the unauthenticated → authenticated signup flow
+// itself, so it must always start logged out regardless of the project's
+// default storageState (see playwright-ui-test-generation.md §4).
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Signup Journey', () => {
-  test.describe.configure({ mode: 'serial' });
   let token: string | undefined;
 
   test.afterEach(async ({ request }) => {

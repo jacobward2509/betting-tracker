@@ -1,56 +1,62 @@
 import { test, expect } from '@playwright/test';
 import { AuthPage } from '@pages/auth.page';
 
+// This suite exercises the unauthenticated → authenticated login flow itself,
+// so it must always start logged out regardless of the project's default
+// storageState (see playwright-ui-test-generation.md §4).
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Auth Login Page', () => {
   test.beforeEach(async ({ page }) => {
     const authPage = new AuthPage(page);
     await authPage.goto();
   });
 
-  test('Cosmetic - login form renders with correct heading, labels, and default field states', async ({ page }) => {
+  test('Cosmetic - page loads with heading and navigation buttons visible', async ({ page }) => {
     const authPage = new AuthPage(page);
     await authPage.expectLoaded();
+  });
 
-    await expect(authPage.authHeading, 'Auth heading should be visible').toBeVisible();
+  test('Cosmetic - Heading renders with correct text for login mode', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectHeadingCosmeticElements();
+
     await expect(authPage.authHeading, 'Auth heading should read "Sign In"').toHaveText('Sign In');
     await expect(authPage.authSubtext, 'Auth subtext should read "Access your betting tracker."').toHaveText(
       'Access your betting tracker.',
     );
+  });
 
-    await expect(authPage.emailLabel, 'Email label should read "Email"').toHaveText('Email');
-    await expect(authPage.emailInput, 'Email input should be empty by default').toBeEmpty();
-    await expect(authPage.emailInput, 'Email input should have no placeholder attribute').not.toHaveAttribute(
-      'placeholder',
-    );
-    await expect(authPage.emailError, 'Email error should be hidden by default').toBeHidden();
+  test('Cosmetic - Email field renders with correct label and default state', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectEmailFieldCosmeticElements();
+  });
 
-    await expect(authPage.passwordLabel, 'Password label should read "Password"').toHaveText('Password');
-    await expect(authPage.passwordInput, 'Password input should be empty by default').toBeEmpty();
-    await expect(authPage.passwordInput, 'Password input should have no placeholder attribute').not.toHaveAttribute(
-      'placeholder',
-    );
-    await expect(authPage.passwordError, 'Password error should be hidden by default').toBeHidden();
+  test('Cosmetic - Password field renders with correct label and default state', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectPasswordFieldCosmeticElements();
+  });
 
-    await expect(authPage.submitButton, 'Submit button should be visible').toBeVisible();
+  test('Cosmetic - Submit button renders with correct text for login mode', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectSubmitButtonCosmeticElements();
+
     await expect(authPage.submitButton, 'Submit button should read "Sign In"').toHaveText('Sign In');
-    await expect(authPage.submitButton, 'Submit button should be enabled').toBeEnabled();
+  });
 
-    await expect(authPage.toggleModeButton, 'Mode toggle button should be visible').toBeVisible();
-    await expect(
-      authPage.toggleModeButton,
-      'Mode toggle button should read "Need an account? Sign up"',
-    ).toHaveText('Need an account? Sign up');
+  test('Cosmetic - Mode toggle button renders with correct text for login mode', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectToggleModeButtonCosmeticElements('Need an account? Sign up');
+  });
 
-    await expect(authPage.authErrorMessage, 'Auth error message should be hidden by default').toBeHidden();
+  test('Cosmetic - Auth error message is hidden by default', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectAuthErrorMessageCosmeticElements();
+  });
 
-    await expect(authPage.nameInput, 'Name input should not be present in the DOM in login mode').toHaveCount(0);
-    await expect(
-      authPage.preferencesHeading,
-      'Betting Preferences heading should not be present in the DOM in login mode',
-    ).toHaveCount(0);
-    await expect(
-      authPage.passwordHelperText,
-      'Password helper text should not be present in the DOM in login mode',
-    ).toHaveCount(0);
+  test('Cosmetic - Signup-only elements are absent from the DOM in login mode', async ({ page }) => {
+    const authPage = new AuthPage(page);
+    await authPage.expectSignupOnlyElementsAbsentInLoginMode();
   });
 });
+

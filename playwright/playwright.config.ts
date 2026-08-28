@@ -57,28 +57,46 @@ export default defineConfig({
     },
 
     // -------------------
+    // UI setup (seeds an account and logs in once, saving storageState)
+    // -------------------
+    {
+      name: 'ui-setup',
+      testMatch: /setup\/ui\.setup\.ts/,
+      use: {
+        baseURL: WEB_BASE_URL,
+      },
+    },
+
+    // -------------------
     // UI tests — dev / sit (smoke / functional / e2e tiers)
     // -------------------
     {
       name: 'smoke',
       testMatch: /smoke\/.*\.spec\.ts/,
+      dependencies: ['ui-setup'],
       use: {
         baseURL: WEB_BASE_URL,
+        storageState: 'playwright/.auth/user.json',
       },
     },
     {
       name: 'functional',
       testMatch: /functional\/.*\.spec\.ts/,
+      dependencies: ['ui-setup'],
       use: {
         baseURL: WEB_BASE_URL,
+        storageState: 'playwright/.auth/user.json',
       },
     },
     {
       name: 'e2e',
       testMatch: /e2e\/.*\.spec\.ts/,
+      dependencies: ['ui-setup'],
       use: {
         baseURL: WEB_BASE_URL,
+        storageState: 'playwright/.auth/user.json',
       },
     },
   ],
 });
+
