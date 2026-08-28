@@ -6,7 +6,12 @@ import helmet from 'helmet';
 import bookmakersRouter from './routes/bookmakers';
 import { prisma } from './prisma';
 import { sendError, zodFieldErrors } from './errors';
-import { loginRequestSchema, signupRequestSchema } from './validation';
+import {
+  loginRequestSchema,
+  signupRequestSchema,
+  updateProfileRequestSchema,
+  updateUserConfigRequestSchema,
+} from './validation';
 import { fetchFixturesForDate } from './services/thesportsdb';
 
 // Express 4 does not automatically forward rejected promises from async route
@@ -160,11 +165,6 @@ const calculateProfit = (input: {
 
   return null;
 };
-
-const normalizeName = (value: unknown): string =>
-  String(value || '')
-    .trim()
-    .replace(/\s+/g, ' ');
 
 const sanitizeUniqueStrings = (items: unknown[]): string[] => {
   const seen = new Set<string>();
@@ -355,9 +355,12 @@ const ensureUserBetConfig = async (userId: string, overrides?: UserConfigOverrid
 
   const enabledRows = await userBookmaker.findMany({ where: { userId }, select: { bookmaker: true }, orderBy: { bookmaker: 'asc' } });
   if ((!enabledRows.length && desiredEnabled.length) || validatedEnabled) {
-    await userBookmaker.deleteMany({ where: { userId } });
-    await userBookmaker.createMany({
-      data: desiredEnabled.map((bookmaker) => ({ userId, bookmaker: bookmaker as any })),
+    await prisma.$transaction(async (tx) => {
+      const txUserBookmaker = (tx as any).userBookmaker;
+      await txUserBookmaker.deleteMany({ where: { userId } });
+      await txUserBookmaker.createMany({
+        data: desiredEnabled.map((bookmaker) => ({ userId, bookmaker: bookmaker as any })),
+      });
     });
   }
 
@@ -531,14 +534,20 @@ app.delete('/api/auth/me', requireAuth, asyncHandler<AuthenticatedRequest>(async
 }));
 
 app.patch('/api/auth/me', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
-  const name = normalizeName(req.body?.name);
-  if (name.length < 2) {
-    return res.status(400).json({ error: 'Name must be at least 2 characters long.' });
+  const parsed = updateProfileRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'Please correct the highlighted fields and try again.',
+      zodFieldErrors(parsed.error),
+    );
   }
 
   const user = await prisma.user.update({
     where: { id: req.user!.id },
-    data: { name },
+    data: { name: parsed.data.name },
   });
 
   res.json({
@@ -552,12 +561,33 @@ app.patch('/api/auth/me', requireAuth, asyncHandler<AuthenticatedRequest>(async 
 
 app.post('/api/auth/logout', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   if (req.sessionToken) {
-    await prisma.session.delete({ where: { token: req.sessionToken } }).catch(() => undefined);
+    try {
+      await prisma.session.delete({ where: { token: req.sessionToken } });
+    } catch (error: any) {
+      // P2025 = "Record to delete does not exist" — the session may have
+      // already been removed (e.g. expired-session cleanup in requireAuth,
+      // or a concurrent logout). That's an acceptable no-op; any other error
+      // (e.g. a genuine DB failure) should not be silently swallowed, since
+      // the client would otherwise receive a 204 implying logout succeeded
+      // when the session might still exist server-side.
+      if (error?.code !== 'P2025') {
+        throw error;
+      }
+    }
   }
   res.sendStatus(204);
 }));
 
 app.get('/api/user/config', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
+  if (!supportsUserConfigModels()) {
+    return sendError(
+      res,
+      503,
+      'SERVICE_UNAVAILABLE',
+      'User config models are not available yet. Run Prisma migrate + generate, then restart API.',
+    );
+  }
+
   const userId = req.user!.id;
   const { allBookmakerValues, enabledBookmakers, preference } = await ensureUserBetConfig(userId);
 
@@ -585,47 +615,69 @@ app.get('/api/user/config', requireAuth, asyncHandler<AuthenticatedRequest>(asyn
 
 app.put('/api/user/config', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   if (!supportsUserConfigModels()) {
-    return res.status(503).json({
-      error: 'User config models are not available yet. Run Prisma migrate + generate, then restart API.',
-    });
+    return sendError(
+      res,
+      503,
+      'SERVICE_UNAVAILABLE',
+      'User config models are not available yet. Run Prisma migrate + generate, then restart API.',
+    );
+  }
+
+  const parsed = updateUserConfigRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'Please correct the highlighted fields and try again.',
+      zodFieldErrors(parsed.error),
+    );
   }
 
   const userId = req.user!.id;
-  const allBookmakers = await prisma.bookmakers.findMany({ orderBy: { bookmakers: 'asc' } });
+  const [allBookmakers, allBetTypes] = await Promise.all([
+    prisma.bookmakers.findMany({ orderBy: { bookmakers: 'asc' } }),
+    prisma.betTypes.findMany({ orderBy: { betTypes: 'asc' } }),
+  ]);
   const allowedBookmakers = new Set(allBookmakers.map((item) => item.bookmakers));
+  const allowedBetTypes = new Set(allBetTypes.map((item) => item.betTypes));
 
-  const body = req.body || {};
+  const body = parsed.data;
   const inputEnabled = Array.isArray(body.enabledBookmakers)
     ? sanitizeUniqueStrings(body.enabledBookmakers)
     : null;
   const defaultBookmakerInput =
     body.defaultBookmaker === null || body.defaultBookmaker === undefined
       ? null
-      : String(body.defaultBookmaker).trim();
+      : body.defaultBookmaker;
   const defaultBetTypeInput =
-    body.defaultBetType === null || body.defaultBetType === undefined
-      ? null
-      : String(body.defaultBetType).trim();
+    body.defaultBetType === null || body.defaultBetType === undefined ? null : body.defaultBetType;
   const defaultStakeInput =
-    body.defaultStake === null || body.defaultStake === undefined || body.defaultStake === ''
-      ? null
-      : Number(body.defaultStake);
-
-  if (defaultStakeInput !== null && (!Number.isFinite(defaultStakeInput) || defaultStakeInput <= 0)) {
-    return res.status(400).json({ error: 'Default stake must be a positive number.' });
-  }
+    body.defaultStake === null || body.defaultStake === undefined ? null : body.defaultStake;
 
   if (defaultBookmakerInput !== null && !allowedBookmakers.has(defaultBookmakerInput as any)) {
-    return res.status(400).json({ error: 'Invalid default bookmaker.' });
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid default bookmaker.', [
+      { field: 'defaultBookmaker', message: 'Invalid default bookmaker.' },
+    ]);
+  }
+
+  if (defaultBetTypeInput !== null && !allowedBetTypes.has(defaultBetTypeInput)) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid default bet type.', [
+      { field: 'defaultBetType', message: 'Invalid default bet type.' },
+    ]);
   }
 
   if (inputEnabled) {
     const invalid = inputEnabled.find((item) => !allowedBookmakers.has(item as any));
     if (invalid) {
-      return res.status(400).json({ error: `Invalid bookmaker: ${invalid}` });
+      return sendError(res, 400, 'VALIDATION_ERROR', `Invalid bookmaker: ${invalid}`, [
+        { field: 'enabledBookmakers', message: `Invalid bookmaker: ${invalid}` },
+      ]);
     }
     if (inputEnabled.length === 0) {
-      return res.status(400).json({ error: 'At least one bookmaker must be enabled.' });
+      return sendError(res, 400, 'VALIDATION_ERROR', 'At least one bookmaker must be enabled.', [
+        { field: 'enabledBookmakers', message: 'At least one bookmaker must be enabled.' },
+      ]);
     }
   }
 
@@ -634,7 +686,9 @@ app.put('/api/user/config', requireAuth, asyncHandler<AuthenticatedRequest>(asyn
   const nextEnabled = inputEnabled || currentEnabled;
 
   if (defaultBookmakerInput !== null && !nextEnabled.includes(defaultBookmakerInput as any)) {
-    return res.status(400).json({ error: 'Default bookmaker must be enabled.' });
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Default bookmaker must be enabled.', [
+      { field: 'defaultBookmaker', message: 'Default bookmaker must be enabled.' },
+    ]);
   }
 
   const nextDefaultBookmaker =
@@ -700,6 +754,7 @@ app.put('/api/user/config', requireAuth, asyncHandler<AuthenticatedRequest>(asyn
           : enabledBookmakers[0] || null,
       betType: preference?.defaultBetType || DEFAULT_BET_TYPE,
       stake:
+
         preference?.defaultStake !== null && preference?.defaultStake !== undefined
           ? Number(preference.defaultStake)
           : DEFAULT_STAKE,

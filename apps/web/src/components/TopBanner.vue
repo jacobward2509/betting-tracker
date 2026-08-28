@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import UserMenuDisplayName from "@/components/UserMenuDisplayName.vue";
@@ -16,9 +16,17 @@ const displayNameRef = ref<InstanceType<typeof UserMenuDisplayName> | null>(null
 const visualPreferencesRef = ref<InstanceType<typeof UserMenuVisualPreferences> | null>(null);
 const betPreferencesRef = ref<InstanceType<typeof UserMenuBetPreferences> | null>(null);
 
-const toggleUserMenu = () => {
+const toggleUserMenu = async () => {
   showUserMenu.value = !showUserMenu.value;
   if (showUserMenu.value) {
+    // The dropdown (and the child components below) is behind v-if, so it
+    // doesn't exist in the DOM — and displayNameRef/betPreferencesRef/
+    // visualPreferencesRef are still null — until Vue flushes this state
+    // change. Without awaiting nextTick() here, the optional-chained calls
+    // below are silent no-ops on the very click that opens the menu, so the
+    // panels only ever show their components' hardcoded initial ref()
+    // values instead of the user's actual saved preferences.
+    await nextTick();
     displayNameRef.value?.reset();
     betPreferencesRef.value?.loadBetPreferences();
     visualPreferencesRef.value?.sync();

@@ -3,7 +3,7 @@ import Ajv, {ValidateFunction} from 'ajv'
 
 const ajv = new Ajv({allErrors: true, strict: false})
 
-// Mirrors components.schemas.CurrentUserResponse in apps/api/openapi/openapi.yaml —
+// Mirrors components.schemas.CurrentUserResponse in apps/api/openapi/auth.yaml —
 // returned by GET /api/auth/me on success.
 const currentUserResponseSchema = {
   type: 'object',

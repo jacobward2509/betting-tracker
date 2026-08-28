@@ -3,7 +3,7 @@ import Ajv, {ValidateFunction} from 'ajv'
 
 const ajv = new Ajv({allErrors: true, strict: false})
 
-// Mirrors components.schemas.AuthResponse in apps/api/openapi/openapi.yaml — the same
+// Mirrors components.schemas.AuthResponse in apps/api/openapi/auth.yaml — the same
 // response shape as signup's 201, returned here with a 200 status on successful login.
 const authResponseSchema = {
   type: 'object',

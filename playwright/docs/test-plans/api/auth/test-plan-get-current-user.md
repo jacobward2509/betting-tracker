@@ -1,6 +1,6 @@
 # Test Plan — GET /api/auth/me
 
-**Source:** `apps/api/openapi/openapi.yaml` (`operationId: getCurrentUser`)
+**Source:** `apps/api/openapi/auth.yaml` (`operationId: getCurrentUser`)
 **Method / Path:** `GET /api/auth/me`
 **Auth:** Required (`security: [bearerAuth]`)
 
@@ -9,7 +9,7 @@
 This endpoint's documented contract differs from the generic scenario template in a
 few deliberate ways. Per General Rules ("follow the exact field names and types from
 the schema", "do not invent fields or rules not documented"), this plan follows what
-`openapi.yaml` (and the `requireAuth` middleware in `apps/api/src/server.ts`) actually
+`apps/api/openapi/auth.yaml` (and the `requireAuth` middleware in `apps/api/src/server.ts`) actually
 declares rather than the generic defaults:
 
 - **No request body, path parameters, or query parameters:** This is a parameterless
@@ -24,15 +24,17 @@ declares rather than the generic defaults:
   enumerating every way a token can be invalid (malformed header, garbage token,
   expired session, deleted-account token), which is left as a known gap rather than a
   covered scenario.
-- **The `401` response body deviates from the documented `ErrorResponse` schema.**
-  `openapi.yaml` documents `401` as `{ error: { code, message, fields? } }` (the shared
-  `ErrorResponse` schema also used by `signup`/`login`), but `requireAuth` actually
-  returns a plain `{ error: "Unauthorized" }` (a string, not an object) for every
-  auth-failure path on this endpoint. This plan asserts the **actual** observed shape
+- **The `401` response body deviates from the shared `ErrorResponse` schema by design.**
+  As of this split, `apps/api/openapi/auth.yaml` documents `401` on this endpoint via a
+  dedicated `PlainUnauthorized` response — `{ error: "<string>" }`, not the nested
+  `{ code, message, fields? }` object used by `signup`/`login`'s `400`/`401` responses —
+  matching what `requireAuth` actually returns for every auth-failure path across every
+  endpoint that uses it. This plan asserts that **actual, now-documented** shape
   (consistent with "follow what the code does, not what's merely documented" for
-  black-box testing), and flags the mismatch as a spec/implementation discrepancy that
-  may be worth raising as a bug during self-heal/repair rather than silently treating
-  the documented schema as correct.
+  black-box testing). Prior to the `auth.yaml` split this was a spec/implementation
+  discrepancy (the old single `openapi.yaml` reused the generic `ErrorResponse` schema
+  for this response); it is no longer a mismatch, just an intentionally different shape
+  for this one response.
 - **Internal Server Error (500):** Not included as a runnable scenario, for the same
   reason as the sibling `signup`/`login` plans — there is no documented, deterministic
   way to trigger a `500` purely from client input.

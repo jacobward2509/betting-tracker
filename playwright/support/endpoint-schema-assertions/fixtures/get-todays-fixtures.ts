@@ -3,7 +3,7 @@ import Ajv, {ValidateFunction} from 'ajv'
 
 const ajv = new Ajv({allErrors: true, strict: false})
 
-// Mirrors components.schemas.League in apps/api/openapi/openapi.yaml — the 11
+// Mirrors components.schemas.League in apps/api/openapi/fixtures.yaml — the 11
 // tracked football competitions (6 domestic leagues + 5 cup competitions).
 const LEAGUE_ENUM = [
   'PREMIER_LEAGUE',
@@ -19,7 +19,7 @@ const LEAGUE_ENUM = [
   'CONFERENCE_LEAGUE'
 ]
 
-// Mirrors components.schemas.Fixture in apps/api/openapi/openapi.yaml —
+// Mirrors components.schemas.Fixture in apps/api/openapi/fixtures.yaml —
 // returned as an array (possibly empty) by GET /api/fixtures/today. An empty
 // array trivially satisfies this schema (there are no items to check against
 // the `items` sub-schema), so this same schema correctly covers the "no

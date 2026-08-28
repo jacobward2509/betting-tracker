@@ -3,7 +3,7 @@ import Ajv, {ValidateFunction} from 'ajv'
 
 const ajv = new Ajv({allErrors: true, strict: false})
 
-// Mirrors components.schemas.AuthResponse in apps/api/openapi/openapi.yaml
+// Mirrors components.schemas.AuthResponse in apps/api/openapi/auth.yaml
 const authResponseSchema = {
   type: 'object',
   additionalProperties: false,
@@ -44,7 +44,7 @@ export function assertSignupSchema(body: unknown): void {
   expect(valid, 'Schema Validation Passed').toBeTruthy()
 }
 
-// Mirrors components.schemas.ErrorResponse in apps/api/openapi/openapi.yaml.
+// Mirrors components.schemas.ErrorResponse in apps/api/openapi/auth.yaml.
 // The generic assert400Schema/assert401Schema helpers in
 // support/functions/schema_assertions.ts check for a top-level 'details'
 // string, which does not match this API's structured error shape — see the
