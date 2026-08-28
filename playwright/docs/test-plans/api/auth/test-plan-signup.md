@@ -105,4 +105,13 @@ the schema", "do not invent fields or rules not documented"), this plan follows 
 - For scenarios 23/24, assert on `error.code` (`ACCOUNT_EXISTS`) in addition to the
   HTTP status, since this API returns a structured `ErrorResponse` body rather than
   a plain string.
+- **Account cleanup:** every scenario that successfully creates an account (1, 2, 23,
+  24) must clean it up via the existing `deleteAccount()` helper
+  (`support/functions/auth-cleanup.ts`), which calls `DELETE /api/auth/me` with the
+  account's bearer token — do not defer cleanup to a separate "dedicated delete suite"
+  or persist tokens to a shared file on disk for later/manual cleanup; there is no such
+  suite in this spec file. Mirror the `getCurrentUser` suite's
+  `beforeEach`/`afterEach` (or `beforeAll`/`afterAll` for a serial pair sharing one
+  account) pattern for scoping account creation and deletion to the tests that need it.
+
 

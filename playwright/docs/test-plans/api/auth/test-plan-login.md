@@ -119,4 +119,14 @@ rather than the generic defaults:
   `error.message` in addition to the HTTP status, since this API returns a structured
   `ErrorResponse` body rather than a plain string — and scenario 19 exists specifically
   to prove the two failure modes are indistinguishable to a caller (anti-enumeration).
+- **Account cleanup:** the account seeded per-test in `beforeEach` (for scenarios 4-20,
+  which each get their own fresh account/credentials) must be cleaned up via the
+  existing `deleteAccount()` helper (`support/functions/auth-cleanup.ts`) in a matching
+  `afterEach` — do not defer cleanup to a separate "dedicated delete suite" or persist
+  tokens to a shared file on disk; there is no such suite in this spec file. Scenarios
+  1, 2, and 3 share one account across a serial trio and therefore need their own
+  `beforeAll`/`afterAll`-scoped account instead, independent of the per-test
+  `beforeEach`/`afterEach` — sharing the per-test account would delete it after the
+  first serial test runs, breaking the pair/trio. Mirror the `getCurrentUser` suite's
+  cleanup pattern throughout.
 

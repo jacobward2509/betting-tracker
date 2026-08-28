@@ -1,5 +1,6 @@
-import { apiGet, apiPost } from '@functions/index';
+import { apiGet, apiPost, deleteAccount } from '@functions/index';
 import {
+  assertCurrentUserSchema,
   assertErrorResponseSchema,
   assertLoginSchema,
   assertSignupSchema,
@@ -14,7 +15,6 @@ import {
 } from '@seed-data/auth';
 
 import { APIRequestContext, APIResponse, expect, test } from '@playwright/test';
-import fs from 'fs';
 
 test.describe('Auth endpoints-V2', () => {
   test.describe('signup', () => {
@@ -26,13 +26,23 @@ test.describe('Auth endpoints-V2', () => {
     });
 
     test.describe('201 - Accepted', () => {
-      // Serial: "Valid request with all fields" writes its signup response to
-      // the shared auth-variables.json dynamic test data file, and
-      // "Validate signup via GET request" reads it back — running serially
-      // avoids concurrent writes without needing file locking.
+      // Serial: "Valid request with all fields" captures its signup response
+      // in a shared closure variable, and "Validate signup via GET request"
+      // reads it back — running serially avoids the two tests racing on the
+      // same account.
       test.describe.configure({ mode: 'serial' });
 
       let response: APIResponse;
+      let signupResponseBody: { token: string; user: { id: string; email: string } };
+
+      test.afterAll(async ({ request }: { request: APIRequestContext }) => {
+        // Cleans up the account created by "Valid request with all fields"
+        // and reused by "Validate signup via GET request" — runs once both
+        // serial tests in this block have finished with it.
+        if (signupResponseBody?.token) {
+          await deleteAccount(request, signupResponseBody.token);
+        }
+      });
 
       test('Valid request with all fields', async ({
         request,
@@ -46,18 +56,7 @@ test.describe('Auth endpoints-V2', () => {
         expect(response.status(), 'Request should return 201').toBe(201);
         const body = await response.json();
         assertSignupSchema(body);
-        // Record the seeded account for the dedicated DELETE /api/auth/me test
-        // suite to consume and clean up later — cleanup is intentionally
-        // deferred there, not performed in this suite.
-        fs.writeFileSync(
-          `support/dynamic-test-data/auth-variables.json`,
-          JSON.stringify({
-            email: requestBody.email,
-            password: requestBody.password,
-            token: body.token,
-            userId: body.user.id,
-          }),
-        );
+        signupResponseBody = body;
       });
 
       test('Validate signup via GET request', async ({
@@ -65,15 +64,8 @@ test.describe('Auth endpoints-V2', () => {
       }: {
         request: APIRequestContext;
       }) => {
-        const authVars = JSON.parse(
-          fs.readFileSync(
-            `support/dynamic-test-data/auth-variables.json`,
-            'utf-8',
-          ),
-        );
-
         response = await apiGet(request, 'api/auth/me', {
-          headers: { Authorization: `Bearer ${authVars.token}` },
+          headers: { Authorization: `Bearer ${signupResponseBody.token}` },
           noAuth: true,
         });
 
@@ -82,14 +74,15 @@ test.describe('Auth endpoints-V2', () => {
         );
         const body = await response.json();
         expect(body.user.id, 'Returned user id matches signup response').toBe(
-          authVars.userId,
+          signupResponseBody.user.id,
         );
         expect(
           body.user.email,
           'Returned user email matches signup response',
-        ).toBe(authVars.email);
+        ).toBe(signupResponseBody.user.email);
       });
     });
+
 
     test.describe('400 - Bad Request', () => {
       let response: APIResponse;
@@ -500,6 +493,14 @@ test.describe('Auth endpoints-V2', () => {
       });
 
       test.describe('Cross-Field Validation', () => {
+        let createdAccountToken: string;
+
+        test.afterEach(async ({ request }: { request: APIRequestContext }) => {
+          // Cleans up the account created by the initial successful signup
+          // in each test below, before the (rejected) duplicate attempt.
+          await deleteAccount(request, createdAccountToken);
+        });
+
         test('Duplicate email — account already exists', async ({
           request,
         }: {
@@ -513,6 +514,8 @@ test.describe('Auth endpoints-V2', () => {
             firstResponse.status(),
             'Initial signup should succeed with 201',
           ).toBe(201);
+          const firstResponseBody = await firstResponse.json();
+          createdAccountToken = firstResponseBody.token;
 
           response = await apiPost(request, URL_STUB, {
             data: requestBody,
@@ -541,6 +544,8 @@ test.describe('Auth endpoints-V2', () => {
             firstResponse.status(),
             'Initial signup should succeed with 201',
           ).toBe(201);
+          const firstResponseBody = await firstResponse.json();
+          createdAccountToken = firstResponseBody.token;
 
           const duplicateBody: SignupRequestBody = {
             ...requestBody,
@@ -560,6 +565,7 @@ test.describe('Auth endpoints-V2', () => {
           );
         });
       });
+
     });
 
     test.describe('413 - Payload Too Large', () => {
@@ -592,6 +598,7 @@ test.describe('Auth endpoints-V2', () => {
     const URL_STUB = 'api/auth/login';
     const SIGNUP_URL_STUB = 'api/auth/signup';
     let registeredEmail: string;
+    let signupToken: string;
     let requestBody: any;
 
     // Creates the account each login test logs into via the signup seed-data
@@ -607,43 +614,67 @@ test.describe('Auth endpoints-V2', () => {
         signupResponse.status(),
         'Setup signup should succeed with 201',
       ).toBe(201);
+      const signupResponseBody = await signupResponse.json();
+      signupToken = signupResponseBody.token;
 
       registeredEmail = signupBody.email;
       requestBody = maximumLoginBody(registeredEmail, signupBody.password);
     });
 
+    test.afterEach(async ({ request }: { request: APIRequestContext }) => {
+      // Cleans up the account seeded above for every test in this describe
+      // (200/400/401/413), consistent with the getCurrentUser suite's
+      // beforeEach/afterEach cleanup pattern.
+      await deleteAccount(request, signupToken);
+    });
+
     test.describe('200 - Accepted', () => {
-      // Serial: "Valid request with all fields" writes its login response to
-      // the shared login-variables.json dynamic test data file, and
-      // "Validate login via GET request" reads it back — running serially
-      // avoids concurrent writes without needing file locking. Mirrors the
-      // signup 201 block's pattern above for the same reason.
+      // Serial: "Valid request with all fields" and "Validate login via GET
+      // request" share one account across two tests, so they need their own
+      // beforeAll/afterAll-scoped account rather than the outer per-test
+      // beforeEach/afterEach above — that per-test account gets deleted right
+      // after each test, which would break the pair sharing a single login
+      // response's token. "Login succeeds with differently-cased email" also
+      // shares this account for consistency, since it just needs a second
+      // valid login against the same registered email.
       test.describe.configure({ mode: 'serial' });
 
       let response: APIResponse;
+      let loginResponseBody: { token: string; user: { id: string; email: string } };
+      let sharedSignupBody: SignupRequestBody;
+      let sharedSignupToken: string;
+
+      test.beforeAll(async ({ request }: { request: APIRequestContext }) => {
+        sharedSignupBody = maximumSignupBody();
+        const signupResponse = await apiPost(request, SIGNUP_URL_STUB, {
+          data: sharedSignupBody,
+          noAuth: true,
+        });
+        const signupResponseBody = await signupResponse.json();
+        sharedSignupToken = signupResponseBody.token;
+      });
+
+      test.afterAll(async ({ request }: { request: APIRequestContext }) => {
+        await deleteAccount(request, sharedSignupToken);
+      });
 
       test('Valid request with all fields', async ({
         request,
       }: {
         request: APIRequestContext;
       }) => {
+        const loginBody = maximumLoginBody(
+          sharedSignupBody.email,
+          sharedSignupBody.password,
+        );
         response = await apiPost(request, URL_STUB, {
-          data: requestBody,
+          data: loginBody,
           noAuth: true,
         });
         expect(response.status(), 'Request should return 200').toBe(200);
         const body = await response.json();
         assertLoginSchema(body);
-        // Record the login response for the following GET-validation test to
-        // consume.
-        fs.writeFileSync(
-          `support/dynamic-test-data/login-variables.json`,
-          JSON.stringify({
-            token: body.token,
-            userId: body.user.id,
-            email: body.user.email,
-          }),
-        );
+        loginResponseBody = body;
       });
 
       test('Validate login via GET request', async ({
@@ -651,15 +682,8 @@ test.describe('Auth endpoints-V2', () => {
       }: {
         request: APIRequestContext;
       }) => {
-        const loginVars = JSON.parse(
-          fs.readFileSync(
-            `support/dynamic-test-data/login-variables.json`,
-            'utf-8',
-          ),
-        );
-
         response = await apiGet(request, 'api/auth/me', {
-          headers: { Authorization: `Bearer ${loginVars.token}` },
+          headers: { Authorization: `Bearer ${loginResponseBody.token}` },
           noAuth: true,
         });
 
@@ -668,12 +692,12 @@ test.describe('Auth endpoints-V2', () => {
         );
         const body = await response.json();
         expect(body.user.id, 'Returned user id matches login response').toBe(
-          loginVars.userId,
+          loginResponseBody.user.id,
         );
         expect(
           body.user.email,
           'Returned user email matches login response',
-        ).toBe(loginVars.email);
+        ).toBe(loginResponseBody.user.email);
       });
 
       test('Login succeeds with differently-cased email', async ({
@@ -681,10 +705,10 @@ test.describe('Auth endpoints-V2', () => {
       }: {
         request: APIRequestContext;
       }) => {
-        const casedBody: LoginRequestBody = {
-          ...requestBody,
-          email: registeredEmail.toUpperCase(),
-        };
+        const casedBody: LoginRequestBody = maximumLoginBody(
+          sharedSignupBody.email.toUpperCase(),
+          sharedSignupBody.password,
+        );
         response = await apiPost(request, URL_STUB, {
           data: casedBody,
           noAuth: true,
@@ -694,6 +718,7 @@ test.describe('Auth endpoints-V2', () => {
         assertLoginSchema(body);
       });
     });
+
 
     test.describe('400 - Bad Request', () => {
       let response: APIResponse;
@@ -1069,4 +1094,74 @@ test.describe('Auth endpoints-V2', () => {
       });
     });
   });
+
+  test.describe('getCurrentUser', () => {
+    const URL_STUB = 'api/auth/me';
+
+    test.describe('200 - Accepted', () => {
+      let token: string;
+      let signupBody: SignupRequestBody;
+      let response: APIResponse;
+
+      test.beforeEach(async ({ request }: { request: APIRequestContext }) => {
+        signupBody = maximumSignupBody();
+        const signupResponse = await apiPost(request, 'api/auth/signup', {
+          data: signupBody,
+          noAuth: true,
+        });
+        const signupResponseBody = await signupResponse.json();
+        token = signupResponseBody.token;
+      });
+
+      test.afterEach(async ({ request }: { request: APIRequestContext }) => {
+        // Cleans up the account seeded in beforeEach, consistent with the
+        // signup/login suites deferring cleanup to a dedicated DELETE
+        // /api/auth/me call rather than leaving accounts to leak.
+        await deleteAccount(request, token);
+      });
+
+      test('Valid request returns the authenticated user', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiGet(request, URL_STUB, {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(response.status(), 'Request should return 200').toBe(200);
+        const body = await response.json();
+        assertCurrentUserSchema(body);
+        expect(body.user.name, 'Returned user name matches signup').toBe(
+          signupBody.name,
+        );
+        expect(body.user.email, 'Returned user email matches signup').toBe(
+          signupBody.email,
+        );
+      });
+    });
+
+    test.describe('401 - Unauthorized', () => {
+      let response: APIResponse;
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 401').toBe(401);
+        const body = await response.json();
+        // Deviates from the documented ErrorResponse schema — requireAuth
+        // returns a plain string error, not the structured { code, message }
+        // shape. See "Scope Notes" in
+        // docs/test-plans/api/auth/test-plan-get-current-user.md.
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+
+      test('Missing auth header', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiGet(request, URL_STUB, { noAuth: true });
+      });
+    });
+  });
 });
+
