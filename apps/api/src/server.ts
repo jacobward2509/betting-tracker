@@ -7,6 +7,7 @@ import bookmakersRouter from './routes/bookmakers';
 import { prisma } from './prisma';
 import { sendError, zodFieldErrors } from './errors';
 import { loginRequestSchema, signupRequestSchema } from './validation';
+import { fetchFixturesForDate } from './services/thesportsdb';
 
 // Express 4 does not automatically forward rejected promises from async route
 // handlers to error-handling middleware — this wrapper does that so unexpected
@@ -1069,6 +1070,33 @@ app.get('/api/player-prop-markets', requireAuth, asyncHandler(async (_req, res) 
   res.json(markets);
 }));
 
+// Intentionally not behind requireAuth — this powers the animated fixtures
+// banner on the logged-out Sign In / Sign Up pages, so it must be readable
+// without a session. It only ever reads from our own cached Fixture table
+// (refreshed daily by scripts/refresh-fixtures.ts / the scheduler below),
+// never calling out to TheSportsDB directly from a request handler.
+app.get('/api/fixtures/today', asyncHandler(async (_req, res) => {
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
+  const fixtures = await prisma.fixture.findMany({
+    where: { kickoffAt: { gte: startOfDay, lt: endOfDay } },
+    orderBy: { kickoffAt: 'asc' },
+    select: {
+      id: true,
+      league: true,
+      homeTeam: true,
+      awayTeam: true,
+      kickoffAt: true,
+      venue: true,
+    },
+  });
+
+  res.json(fixtures);
+}));
+
 app.use('/api', requireAuth, bookmakersRouter);
 
 // Centralized error handler. Must be registered last (after all routes) and
@@ -1088,7 +1116,55 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred.');
 });
 
+const refreshFixturesCache = async () => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const fixtures = await fetchFixturesForDate(today);
+
+    await prisma.$transaction(
+      fixtures.map((fixture) =>
+        prisma.fixture.upsert({
+          where: { sportsDbEventId: fixture.sportsDbEventId },
+          create: {
+            sportsDbEventId: fixture.sportsDbEventId,
+            league: fixture.league,
+            homeTeam: fixture.homeTeam,
+            awayTeam: fixture.awayTeam,
+            kickoffAt: fixture.kickoffAt,
+            venue: fixture.venue,
+          },
+          update: {
+            homeTeam: fixture.homeTeam,
+            awayTeam: fixture.awayTeam,
+            kickoffAt: fixture.kickoffAt,
+            venue: fixture.venue,
+            fetchedAt: new Date(),
+          },
+        }),
+      ),
+    );
+
+    const fetchedIds = fixtures.map((fixture) => fixture.sportsDbEventId);
+    await prisma.fixture.deleteMany({ where: { sportsDbEventId: { notIn: fetchedIds } } });
+
+    console.log(`Fixtures cache refreshed: ${fixtures.length} fixtures for ${today}.`);
+  } catch (error) {
+    console.error('Failed to refresh fixtures cache:', error);
+  }
+};
+
+const FIXTURES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
 app.listen(PORT, () => {
   console.log(`API running on port ${PORT}`);
+
+  // Kick off an initial refresh on boot (so the banner has data even before
+  // the first scheduled interval elapses), then keep it in sync daily.
+  // This mirrors scripts/refresh-fixtures.ts and can be run manually via
+  // `npm run refresh:fixtures` as well (e.g. from an external cron/CI job).
+  void refreshFixturesCache();
+  setInterval(() => {
+    void refreshFixturesCache();
+  }, FIXTURES_REFRESH_INTERVAL_MS);
 });
 
