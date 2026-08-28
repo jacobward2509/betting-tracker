@@ -73,20 +73,20 @@
 
 ## Automation Status
 
-Requires a new page object — `support/pages/fixtures-banner.page.ts` (`FixturesBannerPage`)
-— exposing `bannerContainer` (`getByTestId('fixtures-banner')`), `fixtureRows`
-(`getByTestId('fixture-row')`), and helper methods for scoping to a specific fixture's
-`fixture-league-badge` / `fixture-matchup` / `fixture-kickoff-time` locators, plus mocking
-helpers (e.g. `page.route('**/api/fixtures/today', ...)`) for the fixed fixture sets used
-across all five scenarios. Not yet automated as of this test plan's creation.
+Automated by `support/pages/fixtures-banner.page.ts` (`FixturesBannerPage`), which exposes
+`bannerContainer` (`getByTestId('fixtures-banner')`), `fixtureRows`
+(`getByTestId('fixture-row')`), helper methods for scoping to a specific fixture's
+`fixture-league-badge` / `fixture-matchup` / `fixture-kickoff-time` locators, and mocking
+helpers (`mockFixtures()` / `mockFixturesFailure()` via `page.route('**/api/fixtures/today', ...)`)
+for the fixed fixture sets used across all five scenarios.
 
 | Scenario | Status | Spec file |
 | --- | --- | --- |
-| 1 | ❌ Not Automated | `tests/smoke/fixtures-banner.spec.ts` (planned) |
-| 2 | ❌ Not Automated | `tests/smoke/fixtures-banner.spec.ts` (planned) |
-| 3 | ❌ Not Automated | `tests/functional/fixtures-banner-resilience.spec.ts` (planned) |
-| 4 | ❌ Not Automated | `tests/smoke/fixtures-banner.spec.ts` (planned) |
-| 5 | ❌ Not Automated | `tests/smoke/fixtures-banner.spec.ts` (planned) |
+| 1 | ✅ Automated | `tests/smoke/fixtures-banner.spec.ts` |
+| 2 | ✅ Automated | `tests/smoke/fixtures-banner.spec.ts` |
+| 3 | ✅ Automated | `tests/functional/fixtures-banner.spec.ts` |
+| 4 | ✅ Automated | `tests/smoke/fixtures-banner.spec.ts` |
+| 5 | ✅ Automated | `tests/smoke/fixtures-banner.spec.ts` |
 
 ## References
 
