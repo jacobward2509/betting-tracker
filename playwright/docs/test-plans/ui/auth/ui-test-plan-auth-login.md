@@ -2,20 +2,26 @@
 
 ## Page Information
 
-- **URL Pattern:** `/auth`
+- **URL Pattern:** `/sign-in`
 - **Page Title / Heading:** `Sign In` (`<h1>`), subtext `Access your betting tracker.`
-- **Description:** `AuthView.vue` is a single shared component that renders either a login
-  form or a signup form at the same `/auth` route, toggled entirely client-side via a
-  `mode` ref (`"login" | "signup"`) — there is no separate route or URL for login.
-  `login` is the component's default mode. This plan covers **only** the `login` mode
-  of the component. The `signup` mode is covered by
-  `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-signup.md`.
+- **Description:** `AuthForm.vue` is a shared component that renders either a login form
+  or a signup form depending on its `mode` prop (`"login" | "signup"`). It is rendered
+  by two dedicated route-level views — `SignInView.vue` at `/sign-in` (`mode="login"`)
+  and `SignUpView.vue` at `/sign-up` (`mode="signup"`) — so login and signup now live at
+  distinct URLs rather than toggling client-side state at a single shared route. This
+  plan covers **only** the `/sign-in` route (`login` mode). The `/sign-up` route
+  (`signup` mode) is covered by
+  `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-signup.md`. The legacy `/auth`
+  path still exists as a redirect to `/sign-in` for backwards compatibility with old
+  links/bookmarks.
 - **How Reached:**
-  - Directly navigating to `/auth` (defaults to `mode = "login"`).
+  - Directly navigating to `/sign-in`.
   - Automatically redirected here by the router's `beforeEach` guard when an
     unauthenticated user attempts to visit any `requiresAuth` route (e.g. `/`, `/bets`,
     `/overall-stats`), or after signing out from an authenticated session.
-  - Clicking "Already have an account? Sign in" from signup mode.
+  - Clicking "Already have an account? Sign in" from the `/sign-up` route.
+  - Navigating to the legacy `/auth` path, which redirects here.
+
 
 ## Elements Under Test
 
@@ -34,7 +40,7 @@
 | Password helper text | `getByTestId('password-helper-text')` | `v-else-if="mode === 'signup'"` — never rendered in login mode (signup-only), so this element is absent (not merely hidden) while in login mode |
 | Auth error message | `getByTestId('auth-error-message')` | `v-if="errorMessage"`; hidden by default; renders a human-readable, top-level error message (see Test Scenarios 7–8 for the specific message and when it is triggered) |
 | Submit button | `getByTestId('submit-button')` | `type="submit"`; disabled while `isSubmitting` is `true`; text reads "Sign In" by default, "Please wait..." while submitting |
-| Mode toggle link | `getByTestId('toggle-mode-button')` | Clicking switches `mode` to `"signup"`; this is an in-page state change only — the URL remains `/auth`. Reads "Need an account? Sign up" in login mode. |
+| Mode toggle link | `getByTestId('toggle-mode-button')` | Clicking navigates to the `/sign-up` route. Reads "Need an account? Sign up" in login mode. |
 | Signup-only elements (Name field, Betting Preferences section) | N/A | Never rendered in login mode (`v-if="mode === 'signup'"`) — absent from the DOM entirely, not merely hidden; covered by the signup test plan |
 | "Add Bet" button (destination landmark) | `getByTestId('add-bet-button')` on `/bets` | Not part of this component; used only as the landmark confirming successful login navigation completed (per Out of Scope, its own behavior belongs to the Bets page's own UI test plan) |
 
@@ -49,7 +55,7 @@
 
 | Scenario | Scenario Type | Use Case | Description | Expected Result |
 | --- | --- | --- | --- | --- |
-| 1 | Cosmetic | Login page loads correctly | Navigate to `/auth` (default mode). Verify the page URL, heading, subtext, the Email and Password labels, both inputs' empty initial state (and absence of placeholder text), the submit button, and the mode toggle button; also verify the signup-only elements (Name field, Betting Preferences section, password helper text) are absent from the DOM entirely | URL is `/auth`; heading reads "Sign In"; subtext reads "Access your betting tracker."; Email and Password inputs are visible, empty, and enabled with no placeholder text; "Sign In" submit button is visible and enabled with correct text; "Need an account? Sign up" toggle button is visible; Name input, Betting Preferences heading, and password helper text are not present in the DOM; no field error paragraphs (`email-error`, `password-error`, `auth-error-message`) are visible |
+| 1 | Cosmetic | Login page loads correctly | Navigate to `/sign-in`. Verify the page URL, heading, subtext, the Email and Password labels, both inputs' empty initial state (and absence of placeholder text), the submit button, and the mode toggle button; also verify the signup-only elements (Name field, Betting Preferences section, password helper text) are absent from the DOM entirely | URL is `/sign-in`; heading reads "Sign In"; subtext reads "Access your betting tracker."; Email and Password inputs are visible, empty, and enabled with no placeholder text; "Sign In" submit button is visible and enabled with correct text; "Need an account? Sign up" toggle button is visible; Name input, Betting Preferences heading, and password helper text are not present in the DOM; no field error paragraphs (`email-error`, `password-error`, `auth-error-message`) are visible |
 | 2 | Functional | Password visibility toggle | On the login form, fill the Password input with a value, then click the show/hide password toggle button | Password input's `type` changes from `password` to `text` (value becomes visible) and the button's `aria-label` changes from "Show password" to "Hide password"; clicking again reverts both to their original state |
 | 3 | Functional | Submit button disables and shows "Please wait..." while submitting | Fill in a valid Email and Password and click "Sign In" | Immediately after clicking, the submit button becomes disabled and its label changes to "Please wait..." until the login request resolves |
 | 4 | Functional | Custom inline validation errors shown for empty required fields | Click "Sign In" with the Email and Password fields both empty | Both field-level errors become visible simultaneously: `email-error` reads "Email is required.", `password-error` reads "Password is required."; each corresponding input has `aria-invalid="true"` and a red border; no `POST /api/auth/login` request is sent |
@@ -61,7 +67,8 @@
 
 ## Out of Scope
 
-- **Signup mode** of `AuthView.vue` (heading "Create Account", subtext "Start tracking
+- **Signup mode** of `AuthForm.vue` at the `/sign-up` route (heading "Create Account",
+  subtext "Start tracking
   your bets.", Name field, Betting Preferences section, password helper text) —
   covered by `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-signup.md`.
 - **"Need an account? Sign up" mode toggle navigation itself** (i.e. confirming the
@@ -79,10 +86,10 @@
   does not assert on any further content of the Bets page itself, which belongs to
   that page's own UI test plan.
 - **Sign-out / router-guard redirect behavior** (e.g. unauthenticated users being
-  redirected to `/auth`, or signing out returning here) — these are cross-cutting
+  redirected to `/sign-in`, or signing out returning here) — these are cross-cutting
   router/session behaviors, not part of this component's own scope; noted here only
   as a "How Reached" entry point.
-- **Shared navigation bar / logout button** — not present on this page (`AuthView` is
+- **Shared navigation bar / logout button** — not present on this page (`AuthForm` is
   rendered outside `AppShellView`), so there is no shared component to reference here.
 
 ## Automation Status
@@ -92,30 +99,30 @@ Automated by `support/pages/auth.page.ts` (`AuthPage`) and `support/pages/bets.p
 
 | Scenario | Status | Spec file |
 | --- | --- | --- |
-| 1 | ❌ Not Automated | — |
-| 2 | ❌ Not Automated | — |
-| 3 | ❌ Not Automated | — |
-| 4 | ❌ Not Automated | — |
-| 5 | ❌ Not Automated | — |
-| 6 | ❌ Not Automated | — |
-| 7 | ❌ Not Automated | — |
-| 8 | ❌ Not Automated | — |
-| 9 | ❌ Not Automated | — |
+| 1 | ✅ Automated | `tests/smoke/auth-login.spec.ts` |
+| 2 | ✅ Automated | `tests/functional/auth-login-credentials.spec.ts` |
+| 3 | ✅ Automated | `tests/functional/auth-login-credentials.spec.ts` |
+| 4 | ✅ Automated | `tests/functional/auth-login-validation.spec.ts` |
+| 5 | ✅ Automated | `tests/functional/auth-login-validation.spec.ts` |
+| 6 | ✅ Automated | `tests/functional/auth-login-validation.spec.ts` |
+| 7 | ✅ Automated | `tests/functional/auth-login-credentials.spec.ts` |
+| 8 | ✅ Automated | `tests/functional/auth-login-credentials.spec.ts` |
+| 9 | ✅ Automated | `tests/e2e/login-journey.spec.ts` |
 
-> `AuthPage` (`support/pages/auth.page.ts`) already exposes all locators needed for
+> `AuthPage` (`support/pages/auth.page.ts`) exposes all locators/methods needed for
 > this plan (`authHeading`, `authSubtext`, `emailInput`, `emailError`, `passwordInput`,
 > `passwordError`, `togglePasswordVisibilityButton`, `authErrorMessage`,
-> `submitButton`, `toggleModeButton`) — no new Page Object methods should be required
-> beyond what already exists (`goto`, `fillEmail`, `fillPassword`, `submit`,
-> `togglePasswordVisibility`, `expectLoaded`). Its class-level comment should be
-> updated once login-mode automation is added, since it currently states login mode
-> is out of scope.
+> `submitButton`, `toggleModeButton`) — including `goto('login' | 'signup')` and
+> `expectLoaded(mode?)`, which are now route-aware since login and signup live at
+> distinct URLs (`/sign-in` and `/sign-up`).
 
 ## References
 
-- Application source: `apps/web/src/views/AuthView.vue`
+- Application source: `apps/web/src/components/AuthForm.vue`,
+  `apps/web/src/views/SignInView.vue`
 - Auth store: `apps/web/src/stores/auth.ts`
 - Router guard: `apps/web/src/router/index.ts`
+
 - Related API test plan: `playwright/docs/test-plans/api/auth/test-plan-login.md`
 - Related UI test plan (signup mode of the same component): `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-signup.md`
 

@@ -2,18 +2,24 @@
 
 ## Page Information
 
-- **URL Pattern:** `/auth`
+- **URL Pattern:** `/sign-up`
 - **Page Title / Heading:** `Create Account` (`<h1>`), subtext `Start tracking your bets.`
-- **Description:** `AuthView.vue` is a single shared component that renders either a login
-  form or a signup form at the same `/auth` route, toggled entirely client-side via a
-  `mode` ref (`"login" | "signup"`) — there is no separate route or URL for signup.
-  This plan covers **only** the `signup` mode of the component.
+- **Description:** `AuthForm.vue` is a shared component that renders either a login form
+  or a signup form depending on its `mode` prop (`"login" | "signup"`). It is rendered
+  by two dedicated route-level views — `SignInView.vue` at `/sign-in` (`mode="login"`)
+  and `SignUpView.vue` at `/sign-up` (`mode="signup"`) — so login and signup now live at
+  distinct URLs rather than toggling client-side state at a single shared route. This
+  plan covers **only** the `/sign-up` route (`signup` mode). The legacy `/auth` path
+  still exists as a redirect to `/sign-in` for backwards compatibility with old
+  links/bookmarks.
 - **How Reached:**
-  - Directly navigating to `/auth` (defaults to `mode = "login"`; the user must click
-    the "Need an account? Sign up" toggle to reach signup mode).
-  - Automatically redirected here by the router's `beforeEach` guard when an
-    unauthenticated user attempts to visit any `requiresAuth` route (e.g. `/`, `/bets`,
-    `/overall-stats`).
+  - Directly navigating to `/sign-up`.
+  - Clicking the "Need an account? Sign up" toggle from the `/sign-in` route.
+  - Automatically redirected to `/sign-in` (not `/sign-up`) by the router's
+    `beforeEach` guard when an unauthenticated user attempts to visit any
+    `requiresAuth` route (e.g. `/`, `/bets`, `/overall-stats`); `/sign-up` itself is
+    only reached via direct navigation or the mode toggle.
+
 
 ## Elements Under Test
 
@@ -73,15 +79,16 @@
 | 11 | Functional | Default Stake of zero or less blocks submission via a top-level error | Click "Configure", set the Default Stake input to `0`, fill in a valid Name, Email, and Password, and click "Create Account" | `auth-error-message` becomes visible reading "Default stake must be a positive number."; no `POST /api/auth/signup` request is sent; the submit button is not disabled/does not show "Please wait..." |
 | 12 | Functional | Error message shown on failed signup | Submit the signup form with data that causes the signup request to fail (e.g. an email that already has a registered account) | `auth-error-message` becomes visible below the Password field showing the clean, human-readable message "An account with this email already exists."; the submit button re-enables and its text reverts to "Create Account" |
 | 13 | Functional | Server-side field validation errors surface inline | Submit the signup form with a value that passes client-side validation but fails the API's own validation (e.g. a Name of 61+ characters, which exceeds the server's `maxLength` but not the client's minimum-length-only check) | `auth-error-message` becomes visible reading "Please correct the highlighted fields and try again."; `name-error` becomes visible showing the server-returned field message (e.g. "Name must be at most 60 characters long.") |
-| 14 | Navigation | "Already have an account? Sign in" toggles back to login mode | From the signup form, click the "Already have an account? Sign in" button | The URL remains `/auth` (no route change); the page heading changes to "Sign In" and the signup-only fields (Name, Betting Preferences section, password helper text) become hidden, confirming the component switched to login mode |
+| 14 | Navigation | "Already have an account? Sign in" navigates to the login route | From the signup form, click the "Already have an account? Sign in" button | The URL changes to `/sign-in`; the page heading changes to "Sign In" and the signup-only fields (Name, Betting Preferences section, password helper text) become hidden, confirming the login route rendered |
 | 15 | Navigation | Successful signup with default preferences navigates to the Bets page | Fill in valid Name, Email, and Password values (leaving Betting Preferences unconfigured) and click "Create Account" | The signup request succeeds; URL changes to `/bets`; the "Add Bet" button on the destination page becomes visible, confirming navigation completed |
 | 16 | Navigation | Successful signup with configured preferences navigates to the Bets page | Click "Configure", adjust the Betting Preferences sub-fields (e.g. uncheck a bookmaker, change the Default Bet Type), then fill in valid Name, Email, and Password values and click "Create Account" | The signup request succeeds, followed by a preferences-save request; URL changes to `/bets`; the "Add Bet" button on the destination page becomes visible, confirming navigation completed |
 
 ## Out of Scope
 
-- **Login mode** of `AuthView.vue` (heading "Sign In", subtext "Access your betting
-  tracker.", no Name field, no Betting Preferences section, no password helper text) —
-  to be covered by its own dedicated UI test plan.
+- **Login mode** of `AuthForm.vue` at the `/sign-in` route (heading "Sign In", subtext
+  "Access your betting tracker.", no Name field, no Betting Preferences section, no
+  password helper text) — covered by
+  `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-login.md`.
 - **Backend/API validation content** for signup (exact error messages, field
   constraints, duplicate-email handling, status codes) — covered by
   `playwright/docs/test-plans/api/auth/test-plan-signup.md`. Scenario 13 only asserts that
@@ -96,7 +103,7 @@
   configuration UI's own default/interactive state — the effect of these preferences
   elsewhere in the app (e.g. defaults pre-filled on the Add Bet modal) belongs to that
   feature's own UI test plan.
-- **Shared navigation bar / logout button** — not present on this page (`AuthView` is
+- **Shared navigation bar / logout button** — not present on this page (`AuthForm` is
   rendered outside `AppShellView`), so there is no shared component to reference here.
 
 ## Resolved Issues
@@ -147,7 +154,8 @@ Automated by `support/pages/auth.page.ts` (`AuthPage`) and `support/pages/bets.p
 
 ## References
 
-- Application source: `apps/web/src/views/AuthView.vue`
+- Application source: `apps/web/src/components/AuthForm.vue`,
+  `apps/web/src/views/SignUpView.vue`
 - Auth store: `apps/web/src/stores/auth.ts`
 - Router guard: `apps/web/src/router/index.ts`
 - Related API test plan: `playwright/docs/test-plans/api/auth/test-plan-signup.md`

@@ -17,9 +17,10 @@ export type SignupDetails = {
 
 /**
  * Orchestration only, no assertions (per the Journeys layer convention) —
- * navigates to `/auth`, switches to signup mode, optionally configures
- * Betting Preferences, and submits. Callers assert the resulting outcome
- * (e.g. navigation to `/bets`, or a resulting error) in the spec itself.
+ * navigates directly to `/sign-up` and submits the signup form (optionally
+ * configuring Betting Preferences first). Callers assert the resulting
+ * outcome (e.g. navigation to `/bets`, or a resulting error) in the spec
+ * itself.
  *
  * Returns the bearer session token from the signup response (or undefined if
  * the signup did not succeed), so callers can clean up the created account
@@ -30,8 +31,8 @@ export async function signUp(
   { name, email, password, preferences }: SignupDetails,
 ): Promise<string | undefined> {
   const authPage = new AuthPage(page);
-  await authPage.goto();
-  await authPage.toggleMode();
+  await authPage.goto('signup');
+
 
   if (preferences) {
     await authPage.togglePreferences();

@@ -14,7 +14,7 @@ test.describe('Auth Login Page', () => {
 
   test('Cosmetic - page loads with heading and navigation buttons visible', async ({ page }) => {
     const authPage = new AuthPage(page);
-    await authPage.expectLoaded();
+    await authPage.expectLoaded('login');
   });
 
   test('Cosmetic - Heading renders with correct text for login mode', async ({ page }) => {

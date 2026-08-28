@@ -183,7 +183,7 @@ const fetchBets = async () => {
   } catch (error: any) {
     if (error?.response?.status === 401) {
       await authStore.logout();
-      window.location.href = "/auth";
+      window.location.href = "/sign-in";
       return;
     }
     alert("Failed to fetch bets. Is the API running?");

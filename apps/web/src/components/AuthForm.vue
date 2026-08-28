@@ -3,10 +3,12 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 
+const props = defineProps<{ mode: "login" | "signup" }>();
+
 const authStore = useAuthStore();
 const router = useRouter();
 
-const mode = ref<"login" | "signup">("login");
+const mode = computed(() => props.mode);
 const name = ref("");
 const email = ref("");
 const password = ref("");
@@ -161,6 +163,10 @@ const submit = async () => {
   } finally {
     isSubmitting.value = false;
   }
+};
+
+const toggleMode = () => {
+  router.push(mode.value === "login" ? "/sign-up" : "/sign-in");
 };
 </script>
 
@@ -390,7 +396,7 @@ const submit = async () => {
         type="button"
         class="mt-4 text-sm text-blue-600 hover:text-blue-700"
         data-test-id="toggle-mode-button"
-        @click="mode = mode === 'login' ? 'signup' : 'login'"
+        @click="toggleMode"
       >
         {{
           mode === "login"

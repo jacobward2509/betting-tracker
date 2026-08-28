@@ -14,8 +14,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 test.describe('Auth Signup - Field Validation', () => {
   test.beforeEach(async ({ page }) => {
     const authPage = new AuthPage(page);
-    await authPage.goto();
-    await authPage.toggleMode();
+    await authPage.goto('signup');
   });
 
   test('Submitting with all required fields empty shows inline errors for each field, with no request sent', async ({
@@ -174,8 +173,7 @@ test.describe('Auth Signup - Submission State', () => {
     page,
   }) => {
     const authPage = new AuthPage(page);
-    await authPage.goto();
-    await authPage.toggleMode();
+    await authPage.goto('signup');
 
     await authPage.fillName(VALID_NAME);
     await authPage.fillEmail(randomSignupEmail());
@@ -203,10 +201,9 @@ test.describe('Auth Signup - Submission State', () => {
 });
 
 test.describe('Auth Signup - Mode Toggle', () => {
-  test('"Already have an account? Sign in" switches to login mode without changing the URL', async ({ page }) => {
+  test('"Already have an account? Sign in" navigates to the login route', async ({ page }) => {
     const authPage = new AuthPage(page);
-    await authPage.goto();
-    await authPage.toggleMode();
+    await authPage.goto('signup');
 
     await expect(authPage.authHeading, 'Heading should read "Create Account" before toggling').toHaveText(
       'Create Account',
@@ -214,7 +211,7 @@ test.describe('Auth Signup - Mode Toggle', () => {
 
     await authPage.toggleMode();
 
-    await expect(page, 'URL should remain /auth after toggling mode').toHaveURL(/\/auth/);
+    await expect(page, 'URL should change to /sign-in after toggling mode').toHaveURL(/\/sign-in/);
     await expect(authPage.authHeading, 'Heading should read "Sign In" after toggling back to login mode').toHaveText(
       'Sign In',
     );
@@ -223,4 +220,5 @@ test.describe('Auth Signup - Mode Toggle', () => {
     await expect(authPage.passwordHelperText, 'Password helper text should be hidden in login mode').toBeHidden();
   });
 });
+
 

@@ -9,13 +9,12 @@ test.use({ storageState: { cookies: [], origins: [] } });
 test.describe('Auth Signup Page', () => {
   test.beforeEach(async ({ page }) => {
     const authPage = new AuthPage(page);
-    await authPage.goto();
-    await authPage.toggleMode();
+    await authPage.goto('signup');
   });
 
   test('Cosmetic - page loads with heading and preferences section visible', async ({ page }) => {
     const authPage = new AuthPage(page);
-    await authPage.expectLoaded();
+    await authPage.expectLoaded('signup');
   });
 
   test('Cosmetic - Heading renders with correct text for signup mode', async ({ page }) => {

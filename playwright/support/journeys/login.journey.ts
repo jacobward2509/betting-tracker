@@ -8,13 +8,13 @@ export type LoginDetails = {
 
 /**
  * Orchestration only, no assertions (per the Journeys layer convention) —
- * navigates to `/auth` (default login mode) and submits the login form.
- * Callers assert the resulting outcome (e.g. navigation to `/bets`, or a
- * resulting error) in the spec itself.
+ * navigates directly to `/sign-in` and submits the login form. Callers
+ * assert the resulting outcome (e.g. navigation to `/bets`, or a resulting
+ * error) in the spec itself.
  */
 export async function logIn(page: Page, { email, password }: LoginDetails) {
   const authPage = new AuthPage(page);
-  await authPage.goto();
+  await authPage.goto('login');
   await authPage.fillEmail(email);
   await authPage.fillPassword(password);
   await authPage.submit();

@@ -240,7 +240,7 @@ const saveDisplayName = async () => {
 
 const logout = async () => {
   await authStore.logout();
-  router.push("/auth");
+  router.push("/sign-in");
 };
 
 const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker);

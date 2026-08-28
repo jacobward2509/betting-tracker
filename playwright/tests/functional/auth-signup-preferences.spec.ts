@@ -11,8 +11,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 test.describe('Auth Signup - Betting Preferences', () => {
   test.beforeEach(async ({ page }) => {
     const authPage = new AuthPage(page);
-    await authPage.goto();
-    await authPage.toggleMode();
+    await authPage.goto('signup');
   });
 
   test('Betting Preferences sub-fields become visible after clicking Configure', async ({ page }) => {
@@ -87,8 +86,7 @@ test.describe('Auth Signup - Betting Preferences', () => {
 test.describe('Auth Signup - Password Visibility', () => {
   test.beforeEach(async ({ page }) => {
     const authPage = new AuthPage(page);
-    await authPage.goto();
-    await authPage.toggleMode();
+    await authPage.goto('signup');
   });
 
   test('Password becomes visible after clicking the show/hide toggle, and hides again on a second click', async ({ page }) => {

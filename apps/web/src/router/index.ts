@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import BetsView from "@/views/BetsView.vue";
-import AuthView from "@/views/AuthView.vue";
+import SignInView from "@/views/SignInView.vue";
+import SignUpView from "@/views/SignUpView.vue";
 import AppShellView from "@/views/AppShellView.vue";
 import OverallStatsView from "@/views/OverallStatsView.vue";
 import { useAuthStore } from "@/stores/auth";
@@ -16,7 +17,9 @@ const routes = [
       { path: "overall-stats", component: OverallStatsView, meta: { requiresAuth: true } },
     ],
   },
-  { path: "/auth", component: AuthView, meta: { guestOnly: true } },
+  { path: "/sign-in", component: SignInView, meta: { guestOnly: true } },
+  { path: "/sign-up", component: SignUpView, meta: { guestOnly: true } },
+  { path: "/auth", redirect: "/sign-in" },
 ];
 
 const router = createRouter({
@@ -29,7 +32,7 @@ router.beforeEach(async (to) => {
   await authStore.init();
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return "/auth";
+    return "/sign-in";
   }
 
   if (to.meta.guestOnly && authStore.isAuthenticated) {
@@ -40,3 +43,4 @@ router.beforeEach(async (to) => {
 });
 
 export default router;
+

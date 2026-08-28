@@ -1,11 +1,14 @@
 import { Page, Locator, expect } from '@playwright/test';
 
 /**
- * Page Object for AuthView (`/auth`), covering both its `login` mode (per
- * `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-login.md`) and its
+ * Page Object for the split AuthForm login/signup views — `/sign-in` and
+ * `/sign-up`, covering both the `login` mode (per
+ * `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-login.md`) and
  * `signup` mode (per
- * `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-signup.md`). The
- * component defaults to `login` mode; use `toggleMode()` to reach `signup`.
+ * `playwright/docs/test-plans/ui/auth/ui-test-plan-auth-signup.md`) of the
+ * shared `AuthForm.vue` component. Use `goto('login' | 'signup')` to land
+ * directly on the desired route; `toggleMode()` now navigates between the
+ * two routes rather than toggling in-page state.
  */
 export class AuthPage {
   readonly page: Page;
@@ -111,11 +114,11 @@ export class AuthPage {
     return this.page.getByTestId(`bookmaker-checkbox-${bookmaker}`);
   }
 
-  async goto() {
-    await this.page.goto('/auth');
+  async goto(mode: 'login' | 'signup' = 'login') {
+    await this.page.goto(mode === 'login' ? '/sign-in' : '/sign-up');
   }
 
-  /** Switches the form between login and signup mode (toggles whichever mode isn't currently active). */
+  /** Switches the form between login and signup mode by navigating between `/sign-in` and `/sign-up`. */
   async toggleMode() {
     await this.toggleModeButton.click();
   }
@@ -175,9 +178,15 @@ export class AuthPage {
     await this.submit();
   }
 
-  /** Lightweight smoke check: URL and one defining locator. Mode-agnostic — does not assume signup mode. */
-  async expectLoaded() {
-    await expect(this.page, 'Auth page URL should be /auth').toHaveURL(/\/auth/);
+  /** Lightweight smoke check: URL and one defining locator. Pass the expected mode to assert the specific route (`/sign-in` or `/sign-up`); omit to accept either. */
+  async expectLoaded(mode?: 'login' | 'signup') {
+    if (mode === 'login') {
+      await expect(this.page, 'Auth page URL should be /sign-in').toHaveURL(/\/sign-in/);
+    } else if (mode === 'signup') {
+      await expect(this.page, 'Auth page URL should be /sign-up').toHaveURL(/\/sign-up/);
+    } else {
+      await expect(this.page, 'Auth page URL should be /sign-in or /sign-up').toHaveURL(/\/sign-(in|up)/);
+    }
     await expect(this.authForm, 'Auth form should be visible').toBeVisible();
   }
 
