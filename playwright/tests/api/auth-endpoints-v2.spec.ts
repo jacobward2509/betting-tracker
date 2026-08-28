@@ -1,4 +1,4 @@
-import { apiGet, apiPost, deleteAccount } from '@functions/index';
+import { apiDelete, apiGet, apiPost, deleteAccount } from '@functions/index';
 import {
   assertCurrentUserSchema,
   assertErrorResponseSchema,
@@ -1160,6 +1160,115 @@ test.describe('Auth endpoints-V2', () => {
         request: APIRequestContext;
       }) => {
         response = await apiGet(request, URL_STUB, { noAuth: true });
+      });
+    });
+  });
+
+  test.describe('deleteCurrentAccount', () => {
+    const URL_STUB = 'api/auth/me';
+
+    test.describe('204 - Accepted', () => {
+      // Serial: "Valid request deletes the current user's account" seeds and
+      // deletes the account, and "Validate account deletion via GET request"
+      // reuses the same (now-deleted) account's token to confirm the delete
+      // actually took effect — running serially avoids the two tests racing
+      // on the same account.
+      test.describe.configure({ mode: 'serial' });
+
+      let token: string;
+
+      test('Valid request deletes the current user\'s account', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const signupBody = maximumSignupBody();
+        const signupResponse = await apiPost(request, 'api/auth/signup', {
+          data: signupBody,
+          noAuth: true,
+        });
+        const signupResponseBody = await signupResponse.json();
+        token = signupResponseBody.token;
+
+        const response = await apiDelete(request, URL_STUB, {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(response.status(), 'Request should return 204').toBe(204);
+        const body = await response.text();
+        expect(body, 'Response body should be empty').toBe('');
+      });
+
+      test('Validate account deletion via GET request', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const response = await apiGet(request, URL_STUB, {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(
+          response.status(),
+          'GET /api/auth/me should return 401 for the deleted account',
+        ).toBe(401);
+        const body = await response.json();
+        // Deviates from the documented ErrorResponse schema — requireAuth
+        // returns a plain string error, not the structured { code, message }
+        // shape. See "Scope Notes" in
+        // docs/test-plans/api/auth/test-plan-delete-current-account.md.
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+    });
+
+    test.describe('401 - Unauthorized', () => {
+      let response: APIResponse;
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 401').toBe(401);
+        const body = await response.json();
+        // Deviates from the documented ErrorResponse schema — requireAuth
+        // returns a plain string error, not the structured { code, message }
+        // shape. See "Scope Notes" in
+        // docs/test-plans/api/auth/test-plan-delete-current-account.md.
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+
+      test('Missing auth header', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiDelete(request, URL_STUB, { noAuth: true });
+      });
+
+      test('Re-deleting an already-deleted account (stale token)', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const signupBody = maximumSignupBody();
+        const signupResponse = await apiPost(request, 'api/auth/signup', {
+          data: signupBody,
+          noAuth: true,
+        });
+        const signupResponseBody = await signupResponse.json();
+        const token = signupResponseBody.token;
+
+        const firstDeleteResponse = await apiDelete(request, URL_STUB, {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+        expect(
+          firstDeleteResponse.status(),
+          'First delete should return 204',
+        ).toBe(204);
+
+        response = await apiDelete(request, URL_STUB, {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
       });
     });
   });
