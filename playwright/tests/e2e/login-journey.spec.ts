@@ -5,6 +5,13 @@ import { apiPost, deleteAccount } from '@functions/index';
 import { maximumSignupBody } from '@seed-data/auth/signup';
 
 test.describe('Login Journey', () => {
+  let token: string | undefined;
+
+  test.afterEach(async ({ request }) => {
+    if (token) await deleteAccount(request, token);
+    token = undefined;
+  });
+
   test('User can log in with valid credentials and land on the Bets page', async ({
     page,
     request,
@@ -25,18 +32,14 @@ test.describe('Login Journey', () => {
     expect(seedResponse.status(), 'Seed signup request should return 201').toBe(
       201,
     );
-    const { token } = await seedResponse.json();
+    ({ token } = await seedResponse.json());
 
-    try {
-      await logIn(page, {
-        email: signupBody.email,
-        password: signupBody.password,
-      });
+    await logIn(page, {
+      email: signupBody.email,
+      password: signupBody.password,
+    });
 
-      const betsPage = new BetsPage(page);
-      await betsPage.expectLoaded();
-    } finally {
-      await deleteAccount(request, token);
-    }
+    const betsPage = new BetsPage(page);
+    await betsPage.expectLoaded();
   });
 });
