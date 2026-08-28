@@ -81,11 +81,11 @@ test.describe('Auth endpoints-V2', () => {
           200,
         );
         const body = await response.json();
-        expect(body.user?.id, 'Returned user id matches signup response').toBe(
+        expect(body.user.id, 'Returned user id matches signup response').toBe(
           authVars.userId,
         );
         expect(
-          body.user?.email,
+          body.user.email,
           'Returned user email matches signup response',
         ).toBe(authVars.email);
       });
@@ -667,11 +667,11 @@ test.describe('Auth endpoints-V2', () => {
           200,
         );
         const body = await response.json();
-        expect(body.user?.id, 'Returned user id matches login response').toBe(
+        expect(body.user.id, 'Returned user id matches login response').toBe(
           loginVars.userId,
         );
         expect(
-          body.user?.email,
+          body.user.email,
           'Returned user email matches login response',
         ).toBe(loginVars.email);
       });
