@@ -277,34 +277,43 @@ const requireAuth = async (
   res: express.Response,
   next: express.NextFunction,
 ) => {
-  const authHeader = String(req.headers.authorization || '');
-  const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-  const token = tokenMatch?.[1]?.trim();
+  try {
+    const authHeader = String(req.headers.authorization || '');
+    const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+    const token = tokenMatch?.[1]?.trim();
 
-  if (!token) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const session = await prisma.session.findUnique({
-    where: { token },
-    include: { user: true },
-  });
-
-  if (!session || session.expiresAt <= new Date()) {
-    if (session) {
-      await prisma.session.delete({ where: { token } }).catch(() => undefined);
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
-    return res.status(401).json({ error: 'Unauthorized' });
+
+    const session = await prisma.session.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    // session.user can transiently come back null if the account was deleted
+    // (cascading the Session row away) in the moment between this query
+    // starting and Prisma resolving the include — treat that the same as "no
+    // session found" rather than letting Prisma's runtime error bubble up as
+    // an unhandled rejection that would crash the process.
+    if (!session || !session.user || session.expiresAt <= new Date()) {
+      if (session) {
+        await prisma.session.delete({ where: { token } }).catch(() => undefined);
+      }
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    req.user = {
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+    };
+    req.sessionToken = token;
+
+    next();
+  } catch (err) {
+    next(err);
   }
-
-  req.user = {
-    id: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
-  };
-  req.sessionToken = token;
-
-  next();
 };
 
 const ensureUserBetConfig = async (userId: string, overrides?: UserConfigOverrides) => {
@@ -507,20 +516,20 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
 }));
 
 
-app.get('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get('/api/auth/me', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   res.json({ user: req.user });
-});
+}));
 
-app.delete('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.delete('/api/auth/me', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   // Deleting the User row cascades to Session, UserBookmaker, UserPreference, and
   // Bet rows (all onDelete: Cascade in schema.prisma) — fully removes the account
   // and everything it created. Used to clean up accounts seeded by the Playwright
   // API and UI suites.
   await prisma.user.delete({ where: { id: req.user!.id } });
   res.sendStatus(204);
-});
+}));
 
-app.patch('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.patch('/api/auth/me', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const name = normalizeName(req.body?.name);
   if (name.length < 2) {
     return res.status(400).json({ error: 'Name must be at least 2 characters long.' });
@@ -538,16 +547,16 @@ app.patch('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) =>
       email: user.email,
     },
   });
-});
+}));
 
-app.post('/api/auth/logout', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/auth/logout', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   if (req.sessionToken) {
     await prisma.session.delete({ where: { token: req.sessionToken } }).catch(() => undefined);
   }
   res.sendStatus(204);
-});
+}));
 
-app.get('/api/user/config', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get('/api/user/config', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const userId = req.user!.id;
   const { allBookmakerValues, enabledBookmakers, preference } = await ensureUserBetConfig(userId);
 
@@ -571,9 +580,9 @@ app.get('/api/user/config', requireAuth, async (req: AuthenticatedRequest, res) 
     enabledBookmakers,
     defaults,
   });
-});
+}));
 
-app.put('/api/user/config', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.put('/api/user/config', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   if (!supportsUserConfigModels()) {
     return res.status(503).json({
       error: 'User config models are not available yet. Run Prisma migrate + generate, then restart API.',
@@ -695,10 +704,10 @@ app.put('/api/user/config', requireAuth, async (req: AuthenticatedRequest, res) 
           : DEFAULT_STAKE,
     },
   });
-});
+}));
 
 // GET BETS (with basic filtering)
-app.get('/api/bets', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const { search, bookmaker, result } = req.query;
 
   const bets = await prisma.bet.findMany({
@@ -721,9 +730,9 @@ app.get('/api/bets', requireAuth, async (req: AuthenticatedRequest, res) => {
   });
 
   res.json(bets);
-});
+}));
 
-app.get('/api/team-suggestions', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get('/api/team-suggestions', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const query = String(req.query.q || '')
     .trim()
     .toLowerCase();
@@ -768,9 +777,9 @@ app.get('/api/team-suggestions', requireAuth, async (req: AuthenticatedRequest, 
     .map((item) => item.name);
 
   return res.json(suggestions);
-});
+}));
 
-app.get('/api/suggestions', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get('/api/suggestions', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const rows = await prisma.bet.findMany({
     where: {
       userId: req.user?.id,
@@ -831,9 +840,9 @@ app.get('/api/suggestions', requireAuth, async (req: AuthenticatedRequest, res) 
     .map((item) => item.name);
 
   return res.json({ teams, players });
-});
+}));
 
-app.get('/api/player-suggestions', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get('/api/player-suggestions', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const query = String(req.query.q || '')
     .trim()
     .toLowerCase();
@@ -875,9 +884,9 @@ app.get('/api/player-suggestions', requireAuth, async (req: AuthenticatedRequest
     .map((item) => item.name);
 
   return res.json(suggestions);
-});
+}));
 
-app.post('/api/bets', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const data: Record<string, unknown> = { ...req.body };
   data.result = normalizeResultValue(data.result);
   data.stakeType = normalizeStakeTypeValue(data.stakeType);
@@ -917,9 +926,9 @@ app.post('/api/bets', requireAuth, async (req: AuthenticatedRequest, res) => {
 
   const bet = await prisma.bet.create({ data: data as any });
   res.json(bet);
-});
+}));
 
-app.put('/api/bets/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.put('/api/bets/:id', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const existing = await prisma.bet.findFirst({
     where: { id: req.params.id, userId: req.user?.id },
   });
@@ -984,9 +993,9 @@ app.put('/api/bets/:id', requireAuth, async (req: AuthenticatedRequest, res) => 
     data: data as any,
   });
   res.json(bet);
-});
+}));
 
-app.patch('/api/bets/bulk-result', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.patch('/api/bets/bulk-result', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? sanitizeUniqueStrings(req.body.ids) : [];
   if (!ids.length) {
     return res.status(400).json({ error: 'At least one bet id is required.' });
@@ -1034,9 +1043,9 @@ app.patch('/api/bets/bulk-result', requireAuth, async (req: AuthenticatedRequest
     updatedCount: existingBets.length,
     ids: existingBets.map((bet) => bet.id),
   });
-});
+}));
 
-app.delete('/api/bets/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.delete('/api/bets/:id', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const existing = await prisma.bet.findFirst({
     where: { id: req.params.id, userId: req.user?.id },
     select: { id: true },
@@ -1048,17 +1057,17 @@ app.delete('/api/bets/:id', requireAuth, async (req: AuthenticatedRequest, res) 
 
   await prisma.bet.delete({ where: { id: req.params.id } });
   res.sendStatus(204);
-});
+}));
 
-app.get('/api/bet-types', requireAuth, async (_req, res) => {
+app.get('/api/bet-types', requireAuth, asyncHandler(async (_req, res) => {
   const betTypes = await prisma.betTypes.findMany({ orderBy: { betTypes: 'asc' } });
   res.json(betTypes);
-});
+}));
 
-app.get('/api/player-prop-markets', requireAuth, async (_req, res) => {
+app.get('/api/player-prop-markets', requireAuth, asyncHandler(async (_req, res) => {
   const markets = await prisma.playerPropMarkets.findMany({ orderBy: { markets: 'asc' } });
   res.json(markets);
-});
+}));
 
 app.use('/api', requireAuth, bookmakersRouter);
 
