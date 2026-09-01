@@ -1,47 +1,27 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import { useThemeStore, type Theme } from "@/stores/theme";
 
-const THEME_STORAGE_KEY = "theme-preference";
+const themeStore = useThemeStore();
 
-const theme = ref<"light" | "dark">("light");
-const themeDraft = ref<"light" | "dark">("light");
+const themeDraft = ref<Theme>("light");
 const showVisualPreferences = ref(false);
 const isSavingVisualPreferences = ref(false);
 
-const applyTheme = (nextTheme: "light" | "dark") => {
-  const isDark = nextTheme === "dark";
-  document.documentElement.classList.toggle("dark", isDark);
-  document.body.classList.toggle("dark", isDark);
-};
-
 const sync = () => {
-  try {
-    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-    theme.value =
-      storedTheme === "light" || storedTheme === "dark"
-        ? storedTheme
-        : window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-  } catch {
-    theme.value = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  themeDraft.value = theme.value;
+  themeStore.sync();
+  themeDraft.value = themeStore.theme;
 };
 
 sync();
 
-const isDirty = computed(() => themeDraft.value !== theme.value);
+const isDirty = computed(() => themeDraft.value !== themeStore.theme);
 
 const save = async () => {
   if (isSavingVisualPreferences.value) return;
   try {
     isSavingVisualPreferences.value = true;
-    theme.value = themeDraft.value;
-    applyTheme(theme.value);
-    localStorage.setItem(THEME_STORAGE_KEY, theme.value);
-  } catch {
-    // ignore storage write errors
+    themeStore.setTheme(themeDraft.value);
   } finally {
     isSavingVisualPreferences.value = false;
   }
