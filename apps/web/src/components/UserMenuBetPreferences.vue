@@ -220,8 +220,9 @@ defineExpose({ loadBetPreferences, isDirty });
               <input
                 type="checkbox"
                 :checked="enabledBookmakers.includes(bookmaker)"
+                :disabled="enabledBookmakers.length === 1 && enabledBookmakers.includes(bookmaker)"
                 :data-test-id="`user-menu-bookmaker-checkbox-${slugifyBookmaker(bookmaker)}`"
-                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                 @change="toggleBookmakerEnabled(bookmaker)"
               />
               <span>{{ getBookmakerLabel(bookmaker) }}</span>
