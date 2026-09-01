@@ -1274,10 +1274,105 @@ test.describe('Auth endpoints-V2', () => {
     });
   });
 
+  test.describe('logout', () => {
+    const URL_STUB = 'api/auth/logout';
+
+    test.describe('204 - Accepted', () => {
+      // Serial: "Valid request invalidates the current session" logs out the
+      // account, and "Validate logout via GET request" reuses the same
+      // (now-invalidated) token to confirm the session no longer
+      // authenticates — running serially avoids the two tests racing on the
+      // same account.
+      test.describe.configure({ mode: 'serial' });
+
+      let signupBody: SignupRequestBody;
+      let token: string;
+
+      test.afterAll(async ({ request }: { request: APIRequestContext }) => {
+        // Logout invalidates `token`, so re-login with the same seeded
+        // credentials to obtain a fresh token, then delete the account so
+        // it isn't left behind in the environment.
+        const loginResponse = await apiPost(request, 'api/auth/login', {
+          data: { email: signupBody.email, password: signupBody.password },
+          noAuth: true,
+        });
+        const loginResponseBody = await loginResponse.json();
+        await deleteAccount(request, loginResponseBody.token);
+      });
+
+      test('Valid request invalidates the current session', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        signupBody = maximumSignupBody();
+        const signupResponse = await apiPost(request, 'api/auth/signup', {
+          data: signupBody,
+          noAuth: true,
+        });
+        const signupResponseBody = await signupResponse.json();
+        token = signupResponseBody.token;
+
+        const response = await apiPost(request, URL_STUB, {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(response.status(), 'Request should return 204').toBe(204);
+        const body = await response.text();
+        expect(body, 'Response body should be empty').toBe('');
+      });
+
+      test('Validate logout via GET request', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const response = await apiGet(request, 'api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(
+          response.status(),
+          'GET /api/auth/me should return 401 for the logged-out session',
+        ).toBe(401);
+        const body = await response.json();
+        // Deviates from the documented ErrorResponse schema — requireAuth
+        // returns a plain string error, not the structured { code, message }
+        // shape. See "Scope Notes" in
+        // docs/test-plans/api/auth/test-plan-logout.md.
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+    });
+
+    test.describe('401 - Unauthorized', () => {
+      let response: APIResponse;
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 401').toBe(401);
+        const body = await response.json();
+        // Deviates from the documented ErrorResponse schema — requireAuth
+        // returns a plain string error, not the structured { code, message }
+        // shape. See "Scope Notes" in
+        // docs/test-plans/api/auth/test-plan-logout.md.
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+
+      test('Missing auth header', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiPost(request, URL_STUB, { noAuth: true });
+      });
+    });
+  });
+
   test.describe('updateProfile', () => {
     const URL_STUB = 'api/auth/me';
 
     test.describe('200 - Accepted', () => {
+
       // Serial: "Valid request with all fields" captures its PATCH response in
       // a shared closure variable, and "Validate update via GET request"
       // reads it back — running serially avoids the two tests racing on the
