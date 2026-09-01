@@ -12,7 +12,13 @@ import {
   updateProfileRequestSchema,
   updateUserConfigRequestSchema,
 } from './validation';
-import { fetchFixturesForDate, fetchFixturesForDateWithStats, fetchPlayersForTeam } from './services/thesportsdb';
+import {
+  fetchFixturesForDate,
+  fetchFixturesForDateWithStats,
+  fetchPlayersForTeam,
+  isSuspectedPlayerTruncation,
+} from './services/thesportsdb';
+
 
 // Express 4 does not automatically forward rejected promises from async route
 // handlers to error-handling middleware — this wrapper does that so unexpected
@@ -1299,9 +1305,34 @@ app.get('/api/fixtures', requireAuth, asyncHandler<AuthenticatedRequest>(async (
 
 // Returns the cached rosters for both teams in a given fixture, used to
 // populate the Add Bet player dropdown when the selected market requires a
-// player. Fetches on-demand from TheSportsDB for a team whose roster hasn't
-// been cached yet (e.g. a team never seen in the fixtures refresh window,
-// or a historical fixture's teams) rather than returning an empty list.
+// player. Every time a fixture is selected, we reconcile our Player cache
+// against TheSportsDB's current rosters for both teams rather than trusting
+// whatever is already cached indefinitely -- this is what actually builds
+// up (and keeps accurate) our per-team cache over time, instead of relying
+// solely on the narrow next-7-days window the daily refresh job covers.
+//
+// Reconciliation per team:
+//   - Upsert every player TheSportsDB currently returns for the team, keyed
+//     by their globally-unique sportsDbId. If a player has moved from
+//     another team we already had them cached under, this upsert naturally
+//     re-points their teamSportsDbId/teamName to the new team.
+//   - Delete any Player row still pointing at this team that TheSportsDB no
+//     longer lists on that team's roster -- this is what removes a player
+//     from their old team once they have moved on (their row either gets
+//     recreated under the new team by that team's own upsert above/below,
+//     or simply disappears if they left a tracked team's squad entirely).
+//     Bet.playerId references SetNull on delete, so historical bets
+//     referencing a removed player are preserved, just unlinked.
+//   - If the upstream fetch for a team fails (network error, rate limit) or
+//     returns zero players, we skip both the upsert and the prune for that
+//     team and fall back to whatever is already cached -- a transient
+//     failure must never be allowed to wipe out a previously good cache.
+//   - If the fetch returns exactly the free tier's known cap size while we
+//     already have a fuller roster cached (isSuspectedPlayerTruncation),
+//     we still upsert what came back but skip the delete step -- this
+//     guards against a configured key reverting to the free tier (e.g. a
+//     Premium subscription lapsing) silently pruning a good cache down to
+//     10 players just because that's all a truncated response contained.
 app.get('/api/fixtures/:id/players', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const fixture = await prisma.fixture.findUnique({ where: { id: req.params.id } });
   if (!fixture) {
@@ -1322,38 +1353,60 @@ app.get('/api/fixtures/:id/players', requireAuth, asyncHandler<AuthenticatedRequ
       orderBy: { name: 'asc' },
     });
 
-    if (cached.length === 0) {
-      try {
-        const fetched = await fetchPlayersForTeam(team.id);
-        if (fetched.length > 0) {
-          await prisma.$transaction(
-            fetched.map((player) =>
-              prisma.player.upsert({
-                where: { sportsDbId: player.sportsDbId },
-                create: {
-                  sportsDbId: player.sportsDbId,
-                  teamSportsDbId: player.teamSportsDbId,
-                  teamName: team.name,
-                  name: player.name,
-                  position: player.position,
-                },
-                update: {
-                  teamName: team.name,
-                  name: player.name,
-                  position: player.position,
-                  fetchedAt: new Date(),
-                },
-              }),
-            ),
+    try {
+      const fetched = await fetchPlayersForTeam(team.id);
+      if (fetched.length > 0) {
+        const fetchedIds = fetched.map((player) => player.sportsDbId);
+        const suspectedTruncation = isSuspectedPlayerTruncation(fetched.length, cached.length);
+
+        const operations: Array<ReturnType<typeof prisma.player.upsert> | ReturnType<typeof prisma.player.deleteMany>> = [
+          ...fetched.map((player) =>
+            prisma.player.upsert({
+              where: { sportsDbId: player.sportsDbId },
+              create: {
+                sportsDbId: player.sportsDbId,
+                teamSportsDbId: player.teamSportsDbId,
+                teamName: team.name,
+                name: player.name,
+                position: player.position,
+              },
+              update: {
+                teamSportsDbId: player.teamSportsDbId,
+                teamName: team.name,
+                name: player.name,
+                position: player.position,
+                fetchedAt: new Date(),
+              },
+            }),
+          ),
+        ];
+
+        if (!suspectedTruncation) {
+          // Remove players no longer on this team's roster (retired, left the
+          // club, or moved to another team -- TheSportsDB simply won't list
+          // them here anymore). If they moved to the fixture's other team,
+          // that team's own upsert above/below re-adds them there.
+          operations.push(
+            prisma.player.deleteMany({
+              where: { teamSportsDbId: team.id, sportsDbId: { notIn: fetchedIds } },
+            }),
           );
-          cached = await prisma.player.findMany({
-            where: { teamSportsDbId: team.id },
-            orderBy: { name: 'asc' },
-          });
+        } else {
+          console.warn(
+            `Suspected truncated roster fetch for team ${team.id} (got ${fetched.length}, had ` +
+              `${cached.length} cached) -- skipping prune to avoid destroying a fuller cache.`,
+          );
         }
-      } catch (error) {
-        console.error(`Failed to fetch roster for team ${team.id}:`, error);
+
+        await prisma.$transaction(operations);
+
+        cached = await prisma.player.findMany({
+          where: { teamSportsDbId: team.id },
+          orderBy: { name: 'asc' },
+        });
       }
+    } catch (error) {
+      console.error(`Failed to refresh roster for team ${team.id}:`, error);
     }
 
     players.push(...cached);
@@ -1361,6 +1414,7 @@ app.get('/api/fixtures/:id/players', requireAuth, asyncHandler<AuthenticatedRequ
 
   res.json({ homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, players });
 }));
+
 
 app.use('/api', requireAuth, bookmakersRouter);
 
@@ -1390,13 +1444,15 @@ const refreshFixturesCache = async () => {
       return toDateOnly(date);
     });
 
-    // Sequential (not Promise.all) — see the same note in
-    // scripts/refresh-fixtures.ts: TheSportsDB's free/shared key rate
-    // limits aggressively when 8 dates x 11 leagues run all in parallel.
+    // Sequential (not Promise.all) — every call fetchFixturesForDateWithStats
+    // makes goes through thesportsdb.ts's shared rate limiter, which paces
+    // every request against TheSportsDB's global 30/minute free-tier
+    // budget. No artificial extra delay between dates is needed since the
+    // limiter already enforces the real constraint (see the same note in
+    // scripts/refresh-fixtures.ts).
     const fixturesByDate: Array<Awaited<ReturnType<typeof fetchFixturesForDateWithStats>>> = [];
     for (const date of dates) {
       fixturesByDate.push(await fetchFixturesForDateWithStats(date));
-      await new Promise((resolve) => setTimeout(resolve, 500));
     }
     const fixtures = fixturesByDate.flatMap((r) => r.fixtures);
     const totalFailedLeagues = fixturesByDate.reduce((sum, r) => sum + r.failedLeagues, 0);

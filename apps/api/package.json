@@ -10,6 +10,7 @@
     "repair:bet-types": "tsx scripts/repair-bet-types-retrofit.ts",
     "reset:db": "tsx scripts/reset-database.ts",
     "refresh:fixtures": "tsx scripts/refresh-fixtures.ts",
+    "backfill:players": "tsx scripts/backfill-all-players.ts",
     "seed:markets": "tsx scripts/seed-markets.ts"
   },
   "dependencies": {

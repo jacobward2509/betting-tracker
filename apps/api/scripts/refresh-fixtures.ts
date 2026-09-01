@@ -23,14 +23,16 @@ const main = async () => {
 
   console.log(`Refreshing fixtures cache for ${dates[0]}..${dates[dates.length - 1]}...`);
 
-  // Sequential (not Promise.all) — TheSportsDB's free/shared API key rate
-  // limits aggressively, and firing 8 dates x 11 leagues all in parallel
-  // reliably triggers 429s. A small delay between each date's batch of
-  // League calls keeps us comfortably under that limit.
+  // Sequential (not Promise.all) — every call this makes into
+  // fetchFixturesForDateWithStats goes through thesportsdb.ts's shared rate
+  // limiter, which paces every request against TheSportsDB's global
+  // 30/minute free-tier budget. Running the 8 dates sequentially (rather
+  // than in parallel) keeps things simple and predictable; no artificial
+  // extra delay between dates is needed since the limiter already enforces
+  // the real constraint.
   const fixturesByDate: Array<Awaited<ReturnType<typeof fetchFixturesForDateWithStats>>> = [];
   for (const date of dates) {
     fixturesByDate.push(await fetchFixturesForDateWithStats(date));
-    await new Promise((resolve) => setTimeout(resolve, 500));
   }
   const fixtures = fixturesByDate.flatMap((r) => r.fixtures);
   const totalFailedLeagues = fixturesByDate.reduce((sum, r) => sum + r.failedLeagues, 0);
@@ -130,8 +132,6 @@ const main = async () => {
     } catch (error) {
       console.error(`Failed to refresh roster for team ${teamId}:`, error);
     }
-    // Same free-tier rate-limit throttle as fetchFixturesForDate.
-    await new Promise((resolve) => setTimeout(resolve, 150));
   }
   console.log(`Refreshed rosters for ${refreshedTeams}/${teamIds.size} teams.`);
 };

@@ -116,13 +116,20 @@ paths:
   /api/fixtures/{id}/players:
     get:
       tags: [Fixtures]
-      summary: List cached rosters for both teams in a fixture (Add Bet player dropdown)
+      summary: List reconciled rosters for both teams in a fixture (Add Bet player dropdown)
       description: >
-        Returns the cached player rosters for both teams in the given
-        fixture, used to populate the Add Bet player dropdown when the
-        selected market requires a player (e.g. Player Shots). Fetches a
-        team's roster on-demand from TheSportsDB if it hasn't been cached
-        yet, rather than returning an empty list.
+        Returns the player rosters for both teams in the given fixture, used
+        to populate the Add Bet player dropdown when the selected market
+        requires a player (e.g. Player Shots). Every call reconciles the
+        cached Player table against TheSportsDB's current rosters for both
+        teams: newly-seen players are cached, players no longer on a team's
+        roster are removed (handling transfers -- a player who moved from
+        one tracked team to another is re-added under their new team by that
+        team's own upsert), and a failed/empty upstream fetch for a team
+        falls back to whatever is already cached rather than wiping it out.
+        This is the primary mechanism that builds up the player cache over
+        time, beyond the narrower next-7-days window covered by the daily
+        fixtures refresh job.
       operationId: getPlayersForFixture
       parameters:
         - name: id
@@ -195,9 +202,14 @@ components:
     League:
       type: string
       description: >
-        One of the 11 tracked football competitions (6 domestic leagues + 5
-        cup competitions), matching the `League` enum in
-        `apps/api/prisma/schema.prisma`.
+        Matches the `League` enum in `apps/api/prisma/schema.prisma`. Only
+        7 of these 11 values are actively fetched/cached going forward
+        (PREMIER_LEAGUE, CHAMPIONSHIP, LA_LIGA, BUNDESLIGA, LIGUE_1,
+        SERIE_A, CHAMPIONS_LEAGUE) — EFL_CUP, FA_CUP, EUROPA_LEAGUE, and
+        CONFERENCE_LEAGUE remain valid enum values (so historical
+        Bet/Fixture rows already tagged with them stay intact and this
+        schema still validates them), but new fixture/player data is no
+        longer fetched for those 4 competitions.
       enum:
         - PREMIER_LEAGUE
         - CHAMPIONSHIP
