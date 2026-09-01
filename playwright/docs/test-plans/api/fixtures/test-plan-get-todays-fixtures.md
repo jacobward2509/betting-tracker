@@ -1,13 +1,13 @@
 # Test Plan — GET /api/fixtures/today
 
-**Source:** `apps/api/openapi/openapi.yaml` (`operationId: getTodaysFixtures`)
+**Source:** `apps/api/openapi/fixtures.yaml` (`operationId: getTodaysFixtures`)
 **Method / Path:** `GET /api/fixtures/today`
 **Auth:** Not required (`security: []`)
 
 ## Scope Notes / Deviations from the Generic Template
 
 Per General Rules ("follow the exact field names and types from the schema", "do not
-invent fields or rules not documented"), this plan follows what `openapi.yaml` (and the
+invent fields or rules not documented"), this plan follows what `apps/api/openapi/fixtures.yaml` (and the
 route handler in `apps/api/src/server.ts`) actually declares rather than the generic
 defaults:
 
@@ -71,7 +71,7 @@ defaults:
   `support/endpoint-schema-assertions/fixtures/get-todays-fixtures.ts`, exporting
   `assertFixturesSchema(body)`), following the existing AJV-based pattern in
   `support/endpoint-schema-assertions/auth/signup.ts` — compiling a JSON Schema for the
-  `Fixture` object (mirroring `components.schemas.Fixture` in `openapi.yaml`, including
+  `Fixture` object (mirroring `components.schemas.Fixture` in `apps/api/openapi/fixtures.yaml`, including
   the 11-value `league` enum) and validating the response body is an array where every
   item passes that schema. This same helper covers the `[]` case automatically (an empty
   array trivially satisfies an `items` schema with no items to check).

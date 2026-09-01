@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, deleteAccount } from '@functions/index';
+import { apiDelete, apiGet, apiPatch, apiPost, deleteAccount } from '@functions/index';
 import {
   assertCurrentUserSchema,
   assertErrorResponseSchema,
@@ -8,6 +8,7 @@ import {
 import {
   maximumLoginBody,
   maximumSignupBody,
+  maximumUpdateProfileBody,
   randomSignupEmail,
   VALID_SIGNUP_PASSWORD,
   type LoginRequestBody,
@@ -1267,6 +1268,374 @@ test.describe('Auth endpoints-V2', () => {
 
         response = await apiDelete(request, URL_STUB, {
           headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+      });
+    });
+  });
+
+  test.describe('logout', () => {
+    const URL_STUB = 'api/auth/logout';
+
+    test.describe('204 - Accepted', () => {
+      // Serial: "Valid request invalidates the current session" logs out the
+      // account, and "Validate logout via GET request" reuses the same
+      // (now-invalidated) token to confirm the session no longer
+      // authenticates — running serially avoids the two tests racing on the
+      // same account.
+      test.describe.configure({ mode: 'serial' });
+
+      let signupBody: SignupRequestBody;
+      let token: string;
+
+      test.afterAll(async ({ request }: { request: APIRequestContext }) => {
+        // Logout invalidates `token`, so re-login with the same seeded
+        // credentials to obtain a fresh token, then delete the account so
+        // it isn't left behind in the environment.
+        const loginResponse = await apiPost(request, 'api/auth/login', {
+          data: { email: signupBody.email, password: signupBody.password },
+          noAuth: true,
+        });
+        const loginResponseBody = await loginResponse.json();
+        await deleteAccount(request, loginResponseBody.token);
+      });
+
+      test('Valid request invalidates the current session', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        signupBody = maximumSignupBody();
+        const signupResponse = await apiPost(request, 'api/auth/signup', {
+          data: signupBody,
+          noAuth: true,
+        });
+        const signupResponseBody = await signupResponse.json();
+        token = signupResponseBody.token;
+
+        const response = await apiPost(request, URL_STUB, {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(response.status(), 'Request should return 204').toBe(204);
+        const body = await response.text();
+        expect(body, 'Response body should be empty').toBe('');
+      });
+
+      test('Validate logout via GET request', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const response = await apiGet(request, 'api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(
+          response.status(),
+          'GET /api/auth/me should return 401 for the logged-out session',
+        ).toBe(401);
+        const body = await response.json();
+        // Deviates from the documented ErrorResponse schema — requireAuth
+        // returns a plain string error, not the structured { code, message }
+        // shape. See "Scope Notes" in
+        // docs/test-plans/api/auth/test-plan-logout.md.
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+    });
+
+    test.describe('401 - Unauthorized', () => {
+      let response: APIResponse;
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 401').toBe(401);
+        const body = await response.json();
+        // Deviates from the documented ErrorResponse schema — requireAuth
+        // returns a plain string error, not the structured { code, message }
+        // shape. See "Scope Notes" in
+        // docs/test-plans/api/auth/test-plan-logout.md.
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+
+      test('Missing auth header', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiPost(request, URL_STUB, { noAuth: true });
+      });
+    });
+  });
+
+  test.describe('updateProfile', () => {
+    const URL_STUB = 'api/auth/me';
+
+    test.describe('200 - Accepted', () => {
+
+      // Serial: "Valid request with all fields" captures its PATCH response in
+      // a shared closure variable, and "Validate update via GET request"
+      // reads it back — running serially avoids the two tests racing on the
+      // same account.
+      test.describe.configure({ mode: 'serial' });
+
+      let token: string;
+      let updatedName: string;
+      let response: APIResponse;
+
+      test.afterAll(async ({ request }: { request: APIRequestContext }) => {
+        if (token) {
+          await deleteAccount(request, token);
+        }
+      });
+
+      test('Valid request with all fields', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const signupResponse = await apiPost(request, 'api/auth/signup', {
+          data: maximumSignupBody(),
+          noAuth: true,
+        });
+        const signupResponseBody = await signupResponse.json();
+        token = signupResponseBody.token;
+
+        const requestBody = maximumUpdateProfileBody();
+        updatedName = requestBody.name;
+
+        response = await apiPatch(request, URL_STUB, {
+          data: requestBody,
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(response.status(), 'Request should return 200').toBe(200);
+        const body = await response.json();
+        assertCurrentUserSchema(body);
+        expect(body.user.name, 'Returned user name matches the update').toBe(
+          updatedName,
+        );
+      });
+
+      test('Validate update via GET request', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiGet(request, URL_STUB, {
+          headers: { Authorization: `Bearer ${token}` },
+          noAuth: true,
+        });
+
+        expect(response.status(), 'GET /api/auth/me should return 200').toBe(
+          200,
+        );
+        const body = await response.json();
+        expect(
+          body.user.name,
+          'Returned user name matches the persisted update',
+        ).toBe(updatedName);
+      });
+    });
+
+    test.describe('400 - Bad Request', () => {
+      let token: string;
+      let response: APIResponse;
+      let requestBody: any;
+
+      test.beforeEach(async ({ request }: { request: APIRequestContext }) => {
+        const signupResponse = await apiPost(request, 'api/auth/signup', {
+          data: maximumSignupBody(),
+          noAuth: true,
+        });
+        const signupResponseBody = await signupResponse.json();
+        token = signupResponseBody.token;
+        requestBody = maximumUpdateProfileBody();
+      });
+
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 400').toBe(400);
+        const body = await response.json();
+        assertErrorResponseSchema(body);
+      });
+
+      test.afterEach(async ({ request }: { request: APIRequestContext }) => {
+        if (token) {
+          await deleteAccount(request, token);
+        }
+      });
+
+      test.describe('Missing Mandatory Data', () => {
+        test('Missing name field (empty request body)', async ({
+          request,
+        }: {
+          request: APIRequestContext;
+        }) => {
+          response = await apiPatch(request, URL_STUB, {
+            data: {},
+            headers: { Authorization: `Bearer ${token}` },
+            noAuth: true,
+          });
+
+          const body = await response.json();
+          expect(body.error.code, 'Error code is correct').toBe(
+            'VALIDATION_ERROR',
+          );
+          expect(body.error.fields[0].message, 'Error message is correct').toBe(
+            'Name is required.',
+          );
+        });
+      });
+
+      test.describe('Invalid Data Types', () => {
+        test('name is NULL', async ({
+          request,
+        }: {
+          request: APIRequestContext;
+        }) => {
+          requestBody.name = null;
+          response = await apiPatch(request, URL_STUB, {
+            data: requestBody,
+            headers: { Authorization: `Bearer ${token}` },
+            noAuth: true,
+          });
+
+          const body = await response.json();
+          expect(body.error.code, 'Error code is correct').toBe(
+            'VALIDATION_ERROR',
+          );
+          expect(body.error.fields[0].message, 'Error message is correct').toBe(
+            'Name is required.',
+          );
+        });
+
+        test('name as an Empty String', async ({
+          request,
+        }: {
+          request: APIRequestContext;
+        }) => {
+          requestBody.name = '';
+          response = await apiPatch(request, URL_STUB, {
+            data: requestBody,
+            headers: { Authorization: `Bearer ${token}` },
+            noAuth: true,
+          });
+
+          const body = await response.json();
+          expect(body.error.code, 'Error code is correct').toBe(
+            'VALIDATION_ERROR',
+          );
+          expect(body.error.fields[0].message, 'Error message is correct').toBe(
+            'Name must be at least 2 characters long.',
+          );
+        });
+
+        test('name as a Number', async ({
+          request,
+        }: {
+          request: APIRequestContext;
+        }) => {
+          requestBody.name = 12345;
+          response = await apiPatch(request, URL_STUB, {
+            data: requestBody,
+            headers: { Authorization: `Bearer ${token}` },
+            noAuth: true,
+          });
+
+          const body = await response.json();
+          expect(body.error.code, 'Error code is correct').toBe(
+            'VALIDATION_ERROR',
+          );
+          expect(body.error.fields[0].message, 'Error message is correct').toBe(
+            'Name is required.',
+          );
+        });
+
+        test('name below minimum length', async ({
+          request,
+        }: {
+          request: APIRequestContext;
+        }) => {
+          requestBody.name = 'a';
+          response = await apiPatch(request, URL_STUB, {
+            data: requestBody,
+            headers: { Authorization: `Bearer ${token}` },
+            noAuth: true,
+          });
+
+          const body = await response.json();
+          expect(body.error.code, 'Error code is correct').toBe(
+            'VALIDATION_ERROR',
+          );
+          expect(body.error.fields[0].message, 'Error message is correct').toBe(
+            'Name must be at least 2 characters long.',
+          );
+        });
+
+        test('name above maximum length', async ({
+          request,
+        }: {
+          request: APIRequestContext;
+        }) => {
+          requestBody.name = 'a'.repeat(61);
+          response = await apiPatch(request, URL_STUB, {
+            data: requestBody,
+            headers: { Authorization: `Bearer ${token}` },
+            noAuth: true,
+          });
+
+          const body = await response.json();
+          expect(body.error.code, 'Error code is correct').toBe(
+            'VALIDATION_ERROR',
+          );
+          expect(body.error.fields[0].message, 'Error message is correct').toBe(
+            'Name must be at most 60 characters long.',
+          );
+        });
+
+        test('Unrecognized field present', async ({
+          request,
+        }: {
+          request: APIRequestContext;
+        }) => {
+          const invalidBody: Record<string, unknown> = {
+            ...requestBody,
+            role: 'admin',
+          };
+          response = await apiPatch(request, URL_STUB, {
+            data: invalidBody,
+            headers: { Authorization: `Bearer ${token}` },
+            noAuth: true,
+          });
+
+          const body = await response.json();
+          expect(body.error.code, 'Error code is correct').toBe(
+            'VALIDATION_ERROR',
+          );
+        });
+      });
+    });
+
+    test.describe('401 - Unauthorized', () => {
+      let response: APIResponse;
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 401').toBe(401);
+        const body = await response.json();
+        // Deviates from the documented ErrorResponse schema — requireAuth
+        // returns a plain string error, not the structured { code, message }
+        // shape. See "Scope Notes" in
+        // docs/test-plans/api/auth/test-plan-update-profile.md.
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+
+      test('Missing auth header', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiPatch(request, URL_STUB, {
+          data: maximumUpdateProfileBody(),
           noAuth: true,
         });
       });

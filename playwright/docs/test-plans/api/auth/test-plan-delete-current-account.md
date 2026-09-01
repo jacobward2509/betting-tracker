@@ -1,6 +1,6 @@
 # Test Plan — DELETE /api/auth/me
 
-**Source:** `apps/api/openapi/openapi.yaml` (`operationId: deleteCurrentAccount`)
+**Source:** `apps/api/openapi/auth.yaml` (`operationId: deleteCurrentAccount`)
 **Method / Path:** `DELETE /api/auth/me`
 **Auth:** Required (`security: [bearerAuth]`)
 
@@ -10,7 +10,7 @@ This endpoint's documented contract differs from the generic scenario template i
 few deliberate ways, mirroring the sibling `getCurrentUser` plan
 (`test-plan-get-current-user.md`) where the same reasoning applies. Per General Rules
 ("follow the exact field names and types from the schema", "do not invent fields or
-rules not documented"), this plan follows what `openapi.yaml` (and the `requireAuth`
+rules not documented"), this plan follows what `apps/api/openapi/auth.yaml` (and the `requireAuth`
 middleware in `apps/api/src/server.ts`) actually declares rather than the generic
 defaults:
 
@@ -27,14 +27,13 @@ defaults:
   to prove the auth guard is in effect without enumerating every way a token can be
   invalid (malformed header, garbage token, expired session), which is left as a known
   gap rather than a covered scenario.
-- **The `401` response body deviates from the documented `ErrorResponse` schema**, for
-  the same reason noted in `test-plan-get-current-user.md`: `openapi.yaml` documents
-  `401` as `{ error: { code, message, fields? } }`, but `requireAuth` actually returns
-  a plain `{ error: "Unauthorized" }` (a string, not an object) for every auth-failure
-  path on this endpoint. This plan asserts the **actual** observed shape, and flags the
-  mismatch as a spec/implementation discrepancy that may be worth raising as a bug
-  during self-heal/repair rather than silently treating the documented schema as
-  correct.
+- **The `401` response body deviates from the shared `ErrorResponse` schema by design**,
+  for the same reason noted in `test-plan-get-current-user.md`: `apps/api/openapi/auth.yaml`
+  documents `401` on this endpoint via a dedicated `PlainUnauthorized` response —
+  `{ error: "<string>" }` — matching what `requireAuth` actually returns for every
+  auth-failure path. This plan asserts that **actual, now-documented** shape. Prior to
+  the `auth.yaml` split this was a spec/implementation discrepancy; it is no longer a
+  mismatch, just an intentionally different shape for this one response.
 - **Internal Server Error (500):** Not included as a runnable scenario, for the same
   reason as the sibling `signup`/`login`/`getCurrentUser` plans — there is no
   documented, deterministic way to trigger a `500` purely from client input.

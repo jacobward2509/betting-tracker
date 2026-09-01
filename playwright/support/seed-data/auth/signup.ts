@@ -1,5 +1,5 @@
 /**
- * Seed data for POST /api/auth/signup (apps/api/openapi/openapi.yaml → SignupRequest).
+ * Seed data for POST /api/auth/signup (apps/api/openapi/auth.yaml → SignupRequest).
  *
  * This endpoint has no region/locale concept, so — unlike the multi-region pattern
  * used elsewhere in this guide — a single flat data set is sufficient.

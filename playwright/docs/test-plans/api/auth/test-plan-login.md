@@ -1,6 +1,6 @@
 # Test Plan — POST /api/auth/login
 
-**Source:** `apps/api/openapi/openapi.yaml` (`operationId: login`)
+**Source:** `apps/api/openapi/auth.yaml` (`operationId: login`)
 **Method / Path:** `POST /api/auth/login`
 **Auth:** None required (`security: []` — login itself is the mechanism to obtain a session)
 
@@ -9,7 +9,7 @@
 This endpoint's documented contract differs from the generic scenario template in a
 few deliberate ways. Per General Rules ("follow the exact field names and types from
 the schema", "do not invent fields or rules not documented"), this plan follows what
-`openapi.yaml` (and the mirrored `apps/api/src/validation.ts` schema) actually declares
+`apps/api/openapi/auth.yaml` (and the mirrored `apps/api/src/validation.ts` schema) actually declares
 rather than the generic defaults:
 
 - **No Authentication (401) as a "missing auth header" case:** Not applicable and not
@@ -33,7 +33,7 @@ rather than the generic defaults:
   reason as the `signup` plan — there is no documented, deterministic way to trigger a
   `500` purely from client input.
 - **One endpoint-specific negative category added** (not part of the generic template,
-  but explicitly documented in `openapi.yaml`'s responses for this endpoint, and shared
+  but explicitly documented in `apps/api/openapi/auth.yaml`'s responses for this endpoint, and shared
   with `signup`): **Payload Too Large (413)**.
 - Login's `additionalProperties: false` (`.strict()` in `validation.ts`) means unknown
   fields are a `400` validation error — covered under Invalid Data Types.

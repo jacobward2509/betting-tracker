@@ -58,14 +58,19 @@ export default defineConfig({
 
     // -------------------
     // UI setup (seeds an account and logs in once, saving storageState)
+    // Currently unused — every UI spec file (smoke/functional/e2e) overrides
+    // storageState to start logged out rather than relying on this shared
+    // session, so this project/dependency chain has no active consumer.
+    // Kept commented rather than deleted in case a future spec wants to
+    // reuse a persisted shared session instead of seeding its own account.
     // -------------------
-    {
-      name: 'ui-setup',
-      testMatch: /setup\/ui\.setup\.ts/,
-      use: {
-        baseURL: WEB_BASE_URL,
-      },
-    },
+    // {
+    //   name: 'ui-setup',
+    //   testMatch: /setup\/ui\.setup\.ts/,
+    //   use: {
+    //     baseURL: WEB_BASE_URL,
+    //   },
+    // },
 
     // -------------------
     // UI tests — dev / sit (smoke / functional / e2e tiers)
@@ -73,28 +78,28 @@ export default defineConfig({
     {
       name: 'smoke',
       testMatch: /smoke\/.*\.spec\.ts/,
-      dependencies: ['ui-setup'],
+      // dependencies: ['ui-setup'], // unused — see ui-setup project comment above
       use: {
         baseURL: WEB_BASE_URL,
-        storageState: 'playwright/.auth/user.json',
+        // storageState: 'playwright/.auth/user.json', // unused — every smoke spec overrides storageState itself
       },
     },
     {
       name: 'functional',
       testMatch: /functional\/.*\.spec\.ts/,
-      dependencies: ['ui-setup'],
+      // dependencies: ['ui-setup'], // unused — see ui-setup project comment above
       use: {
         baseURL: WEB_BASE_URL,
-        storageState: 'playwright/.auth/user.json',
+        // storageState: 'playwright/.auth/user.json', // unused — every functional spec overrides storageState itself
       },
     },
     {
       name: 'e2e',
       testMatch: /e2e\/.*\.spec\.ts/,
-      dependencies: ['ui-setup'],
+      // dependencies: ['ui-setup'], // unused — see ui-setup project comment above
       use: {
         baseURL: WEB_BASE_URL,
-        storageState: 'playwright/.auth/user.json',
+        // storageState: 'playwright/.auth/user.json', // unused — every e2e spec overrides storageState itself
       },
     },
   ],

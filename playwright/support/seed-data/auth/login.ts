@@ -1,5 +1,5 @@
 /**
- * Seed data for POST /api/auth/login (apps/api/openapi/openapi.yaml → LoginRequest).
+ * Seed data for POST /api/auth/login (apps/api/openapi/auth.yaml → LoginRequest).
  *
  * Unlike signup, login has no "generate a unique value" concern — the email/password
  * pair must match an existing account. Tests are expected to create that account via

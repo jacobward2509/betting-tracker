@@ -1,6 +1,6 @@
 # Test Plan — POST /api/auth/signup
 
-**Source:** `apps/api/openapi/openapi.yaml` (`operationId: signup`)
+**Source:** `apps/api/openapi/auth.yaml` (`operationId: signup`)
 **Method / Path:** `POST /api/auth/signup`
 **Auth:** None required (`security: []` — signup is intentionally public)
 
@@ -9,7 +9,7 @@
 This endpoint's documented contract differs from the generic scenario template in a
 few deliberate ways. Per General Rules ("follow the exact field names and types from
 the schema", "do not invent fields or rules not documented"), this plan follows what
-`openapi.yaml` actually declares rather than the generic defaults:
+`apps/api/openapi/auth.yaml` actually declares rather than the generic defaults:
 
 - **No Authentication (401):** Not applicable and not included as a dedicated
   scenario. The spec declares `security: []` — signup has no auth requirement, so
@@ -28,7 +28,7 @@ the schema", "do not invent fields or rules not documented"), this plan follows 
   require server-side fault injection, e.g. simulating a database outage), which is
   out of scope for black-box API testing of this endpoint.
 - **One endpoint-specific negative category added** (not part of the generic
-  template, but explicitly documented in `openapi.yaml`'s responses for this
+  template, but explicitly documented in `apps/api/openapi/auth.yaml`'s responses for this
   endpoint): **Payload Too Large (413)**.
 - Signup's `additionalProperties: false` means unknown fields (e.g. the legacy
   `preferences` payload previously sent by this endpoint) are now a `400` validation

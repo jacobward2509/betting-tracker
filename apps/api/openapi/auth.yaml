@@ -2,22 +2,20 @@ openapi: 3.1.0
 info:
   title: Betting Tracker API — Auth
   description: >
-    Authentication endpoints for the Betting Tracker API. This document currently
-    covers signup, login, and the current-user account endpoints (get/delete) only,
-    as part of an iterative backend refactor. Additional endpoints (bets, bookmakers,
-    user config) will be documented in subsequent iterations.
+    Authentication and account-management endpoints for the Betting Tracker
+    API: signup, login, current-user account (get/update/delete), and
+    session logout. This document is one of three split out of a single
+    `openapi.yaml` (see `apps/api/openapi/fixtures.yaml` for cached fixture
+    data and `apps/api/openapi/user-config.yaml` for bookmaker/bet-type
+    preferences) to keep each grouping's file a manageable size. Additional
+    endpoints (bets, bookmakers) will be documented in subsequent iterations.
   version: 1.0.0
 servers:
   - url: http://localhost:3000
     description: Local development
 tags:
   - name: Auth
-    description: Account creation and session management.
-  - name: Fixtures
-    description: >
-      Cached football fixture data (sourced daily from TheSportsDB's free
-      public API) used to power the animated fixtures banner on the sign-in
-      and sign-up pages.
+    description: Account creation, session management, and profile updates.
 
 paths:
   /api/auth/signup:
@@ -27,8 +25,9 @@ paths:
       description: >
         Creates a new user account and returns a bearer session token. Signup is
         intentionally limited to account credentials — bookmaker/bet-type
-        preferences are configured separately via `PUT /api/user/config` after the
-        client has an authenticated session.
+        preferences are configured separately via `PUT /api/user/config` (see
+        `apps/api/openapi/user-config.yaml`) after the client has an
+        authenticated session.
       operationId: signup
       security: []
       requestBody:
@@ -60,6 +59,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
   /api/auth/login:
     post:
       tags: [Auth]
@@ -103,6 +103,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
   /api/auth/me:
     get:
       tags: [Auth]
@@ -121,11 +122,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/CurrentUserResponse'
         '401':
-          description: Missing, invalid, or expired session token.
+          $ref: '#/components/responses/PlainUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags: [Auth]
+      summary: Update the current authenticated user's display name
+      description: >
+        Updates the display name for the account identified by the bearer
+        session token. Reuses the same name validation rules as signup (2–60
+        characters, whitespace trimmed and collapsed) so a post-signup update
+        can't accept a value signup itself would have rejected.
+      operationId: updateProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Display name updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '400':
+          description: Validation failure (name too short, too long, missing, or unrecognized extra fields).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
@@ -142,46 +173,35 @@ paths:
         '204':
           description: Account deleted successfully. No response body.
         '401':
-          description: Missing, invalid, or expired session token.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/PlainUnauthorized'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /api/fixtures/today:
-    get:
-      tags: [Fixtures]
-      summary: List today's cached fixtures across tracked competitions
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Invalidate the current session
       description: >
-        Returns cached fixtures whose kickoff time falls within the current
-        UTC day, across the 11 tracked competitions (English Premier League,
-        EFL Championship, La Liga, Bundesliga, Ligue 1, Serie A, EFL Cup, FA
-        Cup, UEFA Champions League, UEFA Europa League, UEFA Conference
-        League), ordered by kickoff time ascending. The underlying cache is
-        refreshed daily from TheSportsDB and never queried live from this
-        endpoint. Intentionally unauthenticated — it powers the animated
-        fixtures banner rendered on the logged-out sign-in and sign-up pages.
-        Returns an empty array (not an error) when no tracked competition has
-        a fixture today.
-      operationId: getTodaysFixtures
-      security: []
+        Deletes the session identified by the bearer token, so it can no
+        longer be used to authenticate. Idempotent from the caller's
+        perspective for the narrow case of a concurrent delete of the same
+        row (handled server-side as a no-op) — note this is distinct from
+        calling logout twice sequentially with the same token, which returns
+        401 on the second call since requireAuth rejects the now-deleted
+        session before the handler runs.
+      operationId: logout
+      security:
+        - bearerAuth: []
       responses:
-        '200':
-          description: >
-            Today's cached fixtures (may be an empty array if none are
-            scheduled).
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Fixture'
+        '204':
+          description: Session invalidated. No response body.
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
 
+components:
   responses:
     InternalServerError:
       description: Unexpected server error.
@@ -189,6 +209,26 @@ paths:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    PlainUnauthorized:
+      description: >
+        Missing, invalid, or expired session token. Deviates from the
+        documented ErrorResponse schema — `requireAuth` (apps/api/src/server.ts)
+        actually returns a plain `{ error: "Unauthorized" }` (a string, not
+        the nested `{ code, message, fields? }` object) for every
+        auth-failure path on every endpoint in this file. Documented here as
+        the literal observed shape rather than the aspirational one — see
+        `playwright/docs/test-plans/api/auth/test-plan-get-current-user.md`
+        for the same deviation noted against the test suite.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: string
+                example: Unauthorized
 
   schemas:
     SignupRequest:
@@ -235,6 +275,21 @@ paths:
           format: password
           example: correct-horse-battery
 
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 60
+          description: >
+            New display name. Whitespace is trimmed and collapsed
+            server-side. Shares the same validation rule as SignupRequest.name
+            (see apps/api/src/validation.ts) so a post-signup update can't
+            accept a value signup itself would reject.
+          example: Jane A. Doe
 
     AuthUser:
       type: object
@@ -268,52 +323,6 @@ paths:
       properties:
         user:
           $ref: '#/components/schemas/AuthUser'
-
-    League:
-      type: string
-      description: >
-        One of the 11 tracked football competitions (6 domestic leagues + 5
-        cup competitions), matching the `League` enum in
-        `apps/api/prisma/schema.prisma`.
-      enum:
-        - PREMIER_LEAGUE
-        - CHAMPIONSHIP
-        - LA_LIGA
-        - BUNDESLIGA
-        - LIGUE_1
-        - SERIE_A
-        - EFL_CUP
-        - FA_CUP
-        - CHAMPIONS_LEAGUE
-        - EUROPA_LEAGUE
-        - CONFERENCE_LEAGUE
-      example: PREMIER_LEAGUE
-
-    Fixture:
-      type: object
-      additionalProperties: false
-      required: [id, league, homeTeam, awayTeam, kickoffAt, venue]
-      properties:
-        id:
-          type: string
-          format: uuid
-        league:
-          $ref: '#/components/schemas/League'
-        homeTeam:
-          type: string
-          example: Crystal Palace
-        awayTeam:
-          type: string
-          example: Manchester City
-        kickoffAt:
-          type: string
-          format: date-time
-          description: Kickoff time in UTC (ISO 8601).
-        venue:
-          type: string
-          nullable: true
-          description: Venue name as supplied by the upstream data source; may be null.
-          example: Selhurst Park
 
     ErrorFieldDetail:
       type: object

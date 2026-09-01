@@ -1,0 +1,144 @@
+openapi: 3.1.0
+info:
+  title: Betting Tracker API — Fixtures
+  description: >
+    Cached football fixture data used to power the animated fixtures banner
+    on the logged-out sign-in and sign-up pages. This document is one of
+    three split out of a single `openapi.yaml` (see
+    `apps/api/openapi/auth.yaml` for account/session endpoints and
+    `apps/api/openapi/user-config.yaml` for bookmaker/bet-type preferences)
+    to keep each grouping's file a manageable size.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: Fixtures
+    description: >
+      Cached football fixture data (sourced daily from TheSportsDB's free
+      public API) used to power the animated fixtures banner on the sign-in
+      and sign-up pages.
+
+paths:
+  /api/fixtures/today:
+    get:
+      tags: [Fixtures]
+      summary: List today's cached fixtures across tracked competitions
+      description: >
+        Returns cached fixtures whose kickoff time falls within the current
+        UTC day, across the 11 tracked competitions (English Premier League,
+        EFL Championship, La Liga, Bundesliga, Ligue 1, Serie A, EFL Cup, FA
+        Cup, UEFA Champions League, UEFA Europa League, UEFA Conference
+        League), ordered by kickoff time ascending. The underlying cache is
+        refreshed daily from TheSportsDB and never queried live from this
+        endpoint. Intentionally unauthenticated — it powers the animated
+        fixtures banner rendered on the logged-out sign-in and sign-up pages.
+        Returns an empty array (not an error) when no tracked competition has
+        a fixture today.
+      operationId: getTodaysFixtures
+      security: []
+      responses:
+        '200':
+          description: >
+            Today's cached fixtures (may be an empty array if none are
+            scheduled).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Fixture'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  responses:
+    InternalServerError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    League:
+      type: string
+      description: >
+        One of the 11 tracked football competitions (6 domestic leagues + 5
+        cup competitions), matching the `League` enum in
+        `apps/api/prisma/schema.prisma`.
+      enum:
+        - PREMIER_LEAGUE
+        - CHAMPIONSHIP
+        - LA_LIGA
+        - BUNDESLIGA
+        - LIGUE_1
+        - SERIE_A
+        - EFL_CUP
+        - FA_CUP
+        - CHAMPIONS_LEAGUE
+        - EUROPA_LEAGUE
+        - CONFERENCE_LEAGUE
+      example: PREMIER_LEAGUE
+
+    Fixture:
+      type: object
+      additionalProperties: false
+      required: [id, league, homeTeam, awayTeam, kickoffAt, venue]
+      properties:
+        id:
+          type: string
+          format: uuid
+        league:
+          $ref: '#/components/schemas/League'
+        homeTeam:
+          type: string
+          example: Crystal Palace
+        awayTeam:
+          type: string
+          example: Manchester City
+        kickoffAt:
+          type: string
+          format: date-time
+          description: Kickoff time in UTC (ISO 8601).
+        venue:
+          type: string
+          nullable: true
+          description: Venue name as supplied by the upstream data source; may be null.
+          example: Selhurst Park
+
+    ErrorFieldDetail:
+      type: object
+      additionalProperties: false
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          example: email
+        message:
+          type: string
+          example: Please provide a valid email address.
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable error code.
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable summary, safe to display to the end user.
+              example: Please provide a valid email address.
+            fields:
+              type: array
+              description: Field-level validation details, present for VALIDATION_ERROR only.
+              items:
+                $ref: '#/components/schemas/ErrorFieldDetail'

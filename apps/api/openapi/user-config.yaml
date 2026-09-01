@@ -1,0 +1,304 @@
+openapi: 3.1.0
+info:
+  title: Betting Tracker API — User Config
+  description: >
+    Per-user betting preferences: which bookmakers are enabled, and the
+    defaults (bookmaker, bet type, stake) pre-filled on the Add Bet form.
+    This document is one of three split out of a single `openapi.yaml` (see
+    `apps/api/openapi/auth.yaml` for account/session endpoints and
+    `apps/api/openapi/fixtures.yaml` for cached fixture data) to keep each
+    grouping's file a manageable size. Additional endpoints (bets,
+    bookmakers) will be documented in subsequent iterations.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: User Config
+    description: >
+      Bookmaker/bet-type preferences configured after signup via the user
+      menu (see apps/web/src/components/UserMenuBetPreferences.vue), decoupled
+      from account creation itself.
+
+paths:
+  /api/user/config:
+    get:
+      tags: [User Config]
+      summary: Get the current user's bookmaker/bet-type preferences
+      description: >
+        Returns every tracked bookmaker with an `enabled` flag for the
+        current user, the flattened list of enabled bookmakers, and the
+        user's current defaults (bookmaker, bet type, stake) — creating a
+        preference row with platform defaults on first call if one doesn't
+        exist yet (see `ensureUserBetConfig` in apps/api/src/server.ts).
+      operationId: getUserConfig
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User config returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [User Config]
+      summary: Update the current user's bookmaker/bet-type preferences
+      description: >
+        Updates any combination of enabled bookmakers, default bookmaker,
+        default bet type, and default stake for the current user. All fields
+        are optional — a client may update just one preference at a time; any
+        field omitted from the request body is left unchanged. `enabledBookmakers`,
+        when provided, fully replaces the previous set (it is not merged) and
+        must contain at least one bookmaker drawn from the tracked-bookmakers
+        list. `defaultBookmaker` must be one of the (possibly just-updated)
+        enabled bookmakers. `defaultBetType` must be one of the tracked bet
+        types (see the `BetTypes` table, also used by bet creation's "Other"
+        free-text bet type). `defaultStake` must be a positive number, capped
+        at 10000.
+      operationId: updateUserConfig
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserConfigRequest'
+      responses:
+        '200':
+          description: User config updated successfully; returns the config in the same shape as GET.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserConfigResponse'
+        '400':
+          description: >
+            Validation failure — invalid/empty `enabledBookmakers`, a
+            `defaultBookmaker` not present in the tracked-bookmakers list or
+            not among the (possibly just-updated) enabled bookmakers, a
+            `defaultBetType` not present in the tracked-bet-types list, a
+            non-positive or over-10000 `defaultStake`, or an unrecognized
+            extra field in the request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+
+components:
+  responses:
+    InternalServerError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PlainUnauthorized:
+      description: >
+        Missing, invalid, or expired session token. Deviates from the
+        documented ErrorResponse schema — `requireAuth` (apps/api/src/server.ts)
+        actually returns a plain `{ error: "Unauthorized" }` (a string, not
+        the nested `{ code, message, fields? }` object) for every
+        auth-failure path. Documented here as the literal observed shape
+        rather than the aspirational one — see
+        `apps/api/openapi/auth.yaml`'s `PlainUnauthorized` response, which
+        this mirrors, for the same deviation noted against the Auth suite.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: string
+                example: Unauthorized
+    ServiceUnavailable:
+      description: >
+        The underlying Prisma models for per-user bookmaker/bet-type
+        preferences are not available yet (e.g. `prisma migrate` /
+        `prisma generate` has not been run against the current schema).
+        Deviates from the documented ErrorResponse schema — the server
+        returns a plain `{ error: "<message>" }` string here rather than the
+        nested `{ code, message, fields? }` object.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: string
+                example: User config models are not available yet. Run Prisma migrate + generate, then restart API.
+
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  schemas:
+    Bookmaker:
+      type: string
+      description: >
+        One of the tracked bookmakers, matching the `Bookmaker` enum in
+        `apps/api/prisma/schema.prisma`. Note the API's wire values use the
+        Prisma enum member names (no spaces), not the `@map`-ped display
+        labels — e.g. "Paddy Power" is sent/received as `PaddyPower`, and
+        "William Hill" as `WilliamHill` (see
+        apps/web/src/utils/bookmaker.ts's formatBookmakerLabel for the
+        client-side display-label mapping).
+      enum:
+        - Bet365
+        - Betfair
+        - BetUK
+        - Ladbrokes
+        - PaddyPower
+        - SkyBet
+        - WilliamHill
+      example: Bet365
+
+    BookmakerAvailability:
+      type: object
+      additionalProperties: false
+      required: [bookmaker, enabled]
+      properties:
+        bookmaker:
+          $ref: '#/components/schemas/Bookmaker'
+        enabled:
+          type: boolean
+          description: Whether this bookmaker is currently enabled for the current user.
+
+    UserConfigDefaults:
+      type: object
+      additionalProperties: false
+      required: [bookmaker, betType, stake]
+      properties:
+        bookmaker:
+          allOf:
+            - $ref: '#/components/schemas/Bookmaker'
+          nullable: true
+          description: >
+            Null only if the user has somehow ended up with zero enabled
+            bookmakers, which application logic elsewhere otherwise prevents.
+        betType:
+          type: string
+          description: >
+            Free-form string drawn from the `BetTypes` table (not a fixed
+            enum) — mirrors how bet creation itself allows an arbitrary
+            "Other" bet type. Defaults to `"Player Prop"` if never set.
+          example: Player Prop
+        stake:
+          type: number
+          format: double
+          minimum: 0.01
+          maximum: 10000
+          description: Defaults to 5 if never set.
+          example: 5
+
+
+    UserConfigResponse:
+      type: object
+      additionalProperties: false
+      required: [bookmakers, enabledBookmakers, defaults]
+      properties:
+        bookmakers:
+          type: array
+          description: Every tracked bookmaker, each flagged with whether it's enabled for the current user.
+          items:
+            $ref: '#/components/schemas/BookmakerAvailability'
+        enabledBookmakers:
+          type: array
+          description: >-
+            Flattened convenience list of just the enabled bookmakers (same
+            information as filtering `bookmakers` by `enabled: true`).
+          items:
+            $ref: '#/components/schemas/Bookmaker'
+        defaults:
+          $ref: '#/components/schemas/UserConfigDefaults'
+
+    UpdateUserConfigRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        enabledBookmakers:
+          type: array
+          nullable: true
+          minItems: 1
+          description: >
+            When provided, fully replaces the user's enabled-bookmaker set
+            (not merged with the previous set). Must contain at least one
+            entry, and every entry must be a tracked bookmaker.
+          items:
+            $ref: '#/components/schemas/Bookmaker'
+        defaultBookmaker:
+          allOf:
+            - $ref: '#/components/schemas/Bookmaker'
+          nullable: true
+          description: Must be one of the (possibly just-updated) enabled bookmakers.
+        defaultBetType:
+          type: string
+          nullable: true
+          minLength: 1
+          description: Must be one of the tracked bet types (the `BetTypes` table).
+          example: Player Prop
+        defaultStake:
+          type: number
+          format: double
+          nullable: true
+          exclusiveMinimum: 0
+          maximum: 10000
+          example: 5
+
+    ErrorFieldDetail:
+      type: object
+      additionalProperties: false
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          example: defaultStake
+        message:
+          type: string
+          example: Default stake must be a positive number.
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable error code.
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable summary, safe to display to the end user.
+              example: Please correct the highlighted fields and try again.
+            fields:
+              type: array
+              description: Field-level validation details, present for VALIDATION_ERROR only.
+              items:
+                $ref: '#/components/schemas/ErrorFieldDetail'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+security:
+  - bearerAuth: []
+
