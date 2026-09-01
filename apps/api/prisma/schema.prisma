@@ -29,7 +29,24 @@ model Bet {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  // New structured-market fields (all optional/nullable, additive only —
+  // existing rows and the legacy fixture/selection/betType/playerPropMarket
+  // string columns above are left completely untouched so no historical bet
+  // data, for any user, is at risk when these are populated going forward).
+  marketId        Int?
+  market          Market?          @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  selectionId     Int?
+  marketSelection MarketSelection? @relation(fields: [selectionId], references: [id], onDelete: SetNull)
+  lineValue       Decimal?
+  fixtureId       String?
+  fixtureRef      Fixture?         @relation(fields: [fixtureId], references: [id], onDelete: SetNull)
+  playerId        String?
+  playerRef       Player?          @relation(fields: [playerId], references: [id], onDelete: SetNull)
+
   @@index([userId])
+  @@index([marketId])
+  @@index([fixtureId])
+  @@index([playerId])
 }
 
 model User {
@@ -85,19 +102,34 @@ model Bookmakers {
 }
 
 model Fixture {
-  id              String   @id @default(uuid())
-  sportsDbEventId String   @unique
-  league          League
-  homeTeam        String
-  awayTeam        String
-  kickoffAt       DateTime
-  venue           String?
-  fetchedAt       DateTime @default(now())
-  createdAt       DateTime @default(now())
+  id                 String   @id @default(uuid())
+  sportsDbEventId    String   @unique
+  league             League
+  homeTeam           String
+  awayTeam           String
+  homeTeamSportsDbId String?
+  awayTeamSportsDbId String?
+  kickoffAt          DateTime
+  venue              String?
+  // true once this fixture's date is in the past — past-dated fixtures are
+  // cached permanently (never pruned by the daily refresh job) so
+  // retrospective bet logging keeps working; future fixtures (today..+7
+  // days) remain subject to the existing daily prune/refresh cycle.
+  isHistorical       Boolean  @default(false)
+  fetchedAt          DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  bets Bet[]
 
   @@index([kickoffAt])
 }
 
+// Legacy flat lookup tables. Superseded by Market/MarketSelection/MarketLine
+// below, but intentionally NOT dropped — existing Bet rows (for every user,
+// including historical data that must never be lost) store their betType /
+// playerPropMarket as plain strings with no FK into these tables, so keeping
+// them around costs nothing and preserves any code path that still reads
+// them for backward compatibility.
 model BetTypes {
   id       Int    @id @default(autoincrement())
   betTypes String @unique
@@ -106,6 +138,62 @@ model BetTypes {
 model PlayerPropMarkets {
   id      Int    @id @default(autoincrement())
   markets String @unique
+}
+
+// Structured market catalog (replaces manually-curated BetTypes /
+// PlayerPropMarkets for the Add/Edit Bet UI going forward).
+model Market {
+  id             Int            @id @default(autoincrement())
+  name           String         @unique
+  category       MarketCategory
+  requiresPlayer Boolean        @default(false)
+  sortOrder      Int            @default(0)
+  createdAt      DateTime       @default(now())
+
+  selections MarketSelection[]
+  lines      MarketLine[]
+  bets       Bet[]
+}
+
+model MarketSelection {
+  id        Int    @id @default(autoincrement())
+  marketId  Int
+  market    Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  label     String
+  sortOrder Int    @default(0)
+
+  bets Bet[]
+
+  @@unique([marketId, label])
+}
+
+model MarketLine {
+  id        Int     @id @default(autoincrement())
+  marketId  Int
+  market    Market  @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  value     Decimal
+  sortOrder Int     @default(0)
+
+  @@unique([marketId, value])
+}
+
+// Cached player roster data (per team, sourced from TheSportsDB's
+// lookup_all_players.php), refreshed alongside the fixtures cache so the Add
+// Bet player dropdown can be populated from the two teams in the selected
+// fixture without ever calling out to TheSportsDB from a request handler.
+model Player {
+  id             String   @id @default(uuid())
+  sportsDbId     String   @unique
+  teamSportsDbId String
+  teamName       String
+  name           String
+  position       String?
+  fetchedAt      DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  bets Bet[]
+
+  @@index([teamSportsDbId])
 }
 
 enum Bookmaker {
@@ -143,4 +231,9 @@ enum League {
   CHAMPIONS_LEAGUE
   EUROPA_LEAGUE
   CONFERENCE_LEAGUE
+}
+
+enum MarketCategory {
+  MATCH
+  PLAYER
 }

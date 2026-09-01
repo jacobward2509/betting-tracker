@@ -11,11 +11,14 @@ invent fields or rules not documented"), this plan follows what `apps/api/openap
 route handler in `apps/api/src/server.ts`) actually declares rather than the generic
 defaults:
 
-- **No request body, path parameters, or query parameters:** This is a parameterless
-  `GET`. The **Missing Mandatory Data**, **Invalid Data Types**, **Not Found (404)**,
-  **Unprocessable Entity (422)**, and **Cross-Field Validation** categories from the
-  generic template are all not applicable — there are no fields to omit, mistype, or
-  cross-validate, and no resource is looked up by ID.
+- **Single optional query parameter (`tzOffsetMinutes`), no request body or path
+  parameters:** The **Missing Mandatory Data**, **Not Found (404)**, **Unprocessable
+  Entity (422)**, and **Cross-Field Validation** categories from the generic template
+  are all not applicable — `tzOffsetMinutes` is optional (defaults to `0`/UTC when
+  omitted or not a valid number) and there is no resource looked up by ID. **Invalid
+  Data Types** is narrowed to a single explicit scenario proving the endpoint actually
+  reads `tzOffsetMinutes` to resolve "today" against the caller's local calendar day
+  (see Scenario 4), rather than a full invalid-type matrix.
 - **No Authentication (401) category does not apply.** This endpoint is deliberately
   `security: []` — it must remain callable with no `Authorization` header at all, since
   it powers the animated fixtures banner on the logged-out sign-in/sign-up pages. This
@@ -59,6 +62,7 @@ defaults:
 | 1        | Accepted       | Returns a valid `Fixture[]` response, empty or populated               | Call `GET /api/fixtures/today` with no seeding/setup. Assert `200`. If the body is `[]`, that is a pass (no tracked competition has a fixture today). If the body is non-empty, assert every item matches the `Fixture` schema (`id`, `league` — one of the 11 documented enum values, `homeTeam`, `awayTeam`, `kickoffAt`, `venue`) and that every `kickoffAt` falls within the current UTC day (`>= start of today`, `< start of tomorrow`) | 200                       |
 | 2        | Accepted       | Response is ordered by `kickoffAt` ascending                          | Using the same response as Scenario 1, if the body contains two or more items, assert the array is sorted by `kickoffAt` ascending (each item's `kickoffAt` is `<=` the next item's) — this scenario is a no-op assertion (trivially passes) on days with 0–1 fixtures, since ordering is unobservable with fewer than two items | 200                       |
 | 3        | Accepted       | Succeeds with no `Authorization` header (endpoint is unauthenticated) | Call `GET /api/fixtures/today` with no `Authorization` header at all; assert `200` and that the body matches the `Fixture[]` schema (per Scenario 1) — proves this endpoint is reachable pre-login, unlike every other endpoint in this API | 200                       |
+| 4        | Invalid Data Types | Resolves "today" against the caller-supplied `tzOffsetMinutes` rather than the server's UTC clock | Call `GET /api/fixtures/today?tzOffsetMinutes=720` (720 = UTC-12, the furthest-behind-UTC real timezone). Assert `200` and the `Fixture[]` schema (per Scenario 1). If non-empty, assert every `kickoffAt` falls within the calendar day computed by shifting "now" back 720 minutes before truncating to a day — not the plain UTC day used by Scenario 1 — proving the endpoint actually reads and applies the parameter rather than silently ignoring it | 200                       |
 
 ## Execution Notes
 

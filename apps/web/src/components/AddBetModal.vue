@@ -18,6 +18,7 @@
             <input
               type="date"
               v-model="date"
+              :max="maxBetDate"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               required
               data-test-id="input-date"
@@ -65,63 +66,114 @@
           </div>
 
           <div v-if="betType === 'Player Prop'">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Market</label>
+            <select
+              v-model="selectedMarketId"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player-prop-market"
+            >
+              <option disabled value="">Select market</option>
+              <option v-for="market in playerMarkets" :key="market.id" :value="market.id">
+                {{ market.name }}
+              </option>
+            </select>
+          </div>
+
+          <div v-if="betType === 'Player Prop' && selectedMarket && selectedMarket.requiresPlayer">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Player</label>
-            <input
-              v-model="player"
-              type="text"
-              list="add-player-suggestions"
+            <select
+              v-model="selectedPlayerId"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               required
               data-test-id="input-player"
+            >
+              <option value="">
+                {{ playersLoading ? "Loading players..." : "Select player" }}
+              </option>
+              <optgroup v-if="fixturePlayers.homeTeam" :label="fixturePlayers.homeTeam">
+                <option
+                  v-for="p in fixturePlayers.players.filter((pl) => pl.teamName === fixturePlayers.homeTeam)"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  {{ p.name }}
+                </option>
+              </optgroup>
+              <optgroup v-if="fixturePlayers.awayTeam" :label="fixturePlayers.awayTeam">
+                <option
+                  v-for="p in fixturePlayers.players.filter((pl) => pl.teamName === fixturePlayers.awayTeam)"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  {{ p.name }}
+                </option>
+              </optgroup>
+              <option value="__manual__">Other / not listed</option>
+            </select>
+
+            <input
+              v-if="selectedPlayerId === '__manual__'"
+              v-model="manualPlayerName"
+              type="text"
+              list="add-player-suggestions"
+              placeholder="Player name"
+              class="mt-2 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player-manual"
             />
             <datalist id="add-player-suggestions">
               <option v-for="name in filteredPlayerSuggestions" :key="`add-player-${name}`" :value="name" />
             </datalist>
           </div>
 
-          <div v-if="betType === 'Player Prop'" class="grid gap-3 sm:grid-cols-2">
-            <div :class="requiresHalfStepLine(playerPropMarket) ? '' : 'sm:col-span-2'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Player Prop Market</label>
+          <div v-if="betType === 'Player Prop' && selectedMarket && selectedMarket.selections.length">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Selection</label>
+            <div class="mt-1 grid gap-3" :class="selectedMarket.lines.length ? 'sm:grid-cols-2' : ''">
               <select
-                v-model="playerPropMarket"
-                class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                :required="betType === 'Player Prop'"
-                data-test-id="input-player-prop-market"
+                v-model="selectedSelectionId"
+                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+                data-test-id="input-player-prop-selection"
               >
-                <option disabled value="">Select market</option>
-                <option
-                  v-for="market in playerPropMarkets"
-                  :key="market.id"
-                  :value="market.markets"
-                >
-                  {{ market.markets }}
+                <option disabled value="">Select selection</option>
+                <option v-for="s in selectedMarket.selections" :key="s.id" :value="s.id">
+                  {{ s.label }}
                 </option>
               </select>
-            </div>
-            <div v-if="requiresHalfStepLine(playerPropMarket)">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Value</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input
-                  v-model.number="playerPropLineWhole"
-                  type="number"
-                  min="0"
-                  step="1"
-                  class="block w-20 border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                  required
-                  data-test-id="input-player-prop-line-whole"
-                />
-                <input
-                  value=".5"
-                  readonly
-                  class="block w-16 border rounded px-3 py-2 bg-gray-100 text-gray-700 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-200"
-                />
-              </div>
+              <select
+                v-if="selectedMarket.lines.length"
+                v-model="selectedLineValue"
+                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+                data-test-id="input-player-prop-line"
+              >
+                <option disabled value="">Select line</option>
+                <option v-for="l in selectedMarket.lines" :key="l.id" :value="l.value">
+                  {{ l.value }}
+                </option>
+              </select>
             </div>
           </div>
 
           <div v-if="betType !== 'Accumulator'">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
-            <div class="mt-1 flex items-center gap-2">
+            <select
+              v-model="selectedFixtureId"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-fixture"
+            >
+              <option value="">
+                {{ fixturesLoading ? "Loading fixtures..." : "Select fixture" }}
+              </option>
+              <option v-for="f in fixtures" :key="f.id" :value="f.id">
+                {{ f.homeTeam }} vs {{ f.awayTeam }}
+              </option>
+              <option value="__manual__">Other / not listed</option>
+            </select>
+
+            <div v-if="selectedFixtureId === '__manual__'" class="mt-2 flex items-center gap-2">
               <input
                 v-model="homeTeam"
                 type="text"
@@ -369,13 +421,52 @@ watch(
 const bookie = ref("");
 const bookmakers = ref<{ id: string; bookmakers: string }[]>([]);
 const betTypes = ref<{ id: number | string; betTypes: string }[]>([]);
-const playerPropMarkets = ref<{ id: number; markets: string }[]>([]);
 const fallbackBetTypes = ["Accumulator", "Bet Builder", "Player Prop", "Superboost", "FT Result", "Other"];
 const userDefaultBookmaker = ref("");
 const userDefaultBetType = ref("Player Prop");
 const userDefaultStake = ref(5);
 const authStore = useAuthStore();
 const suggestionsStore = useSuggestionsStore();
+
+type MarketSelectionOption = { id: number; label: string; sortOrder: number };
+type MarketLineOption = { id: number; value: string; sortOrder: number };
+type MarketOption = {
+  id: number;
+  name: string;
+  category: "MATCH" | "PLAYER";
+  requiresPlayer: boolean;
+  selections: MarketSelectionOption[];
+  lines: MarketLineOption[];
+};
+type FixtureOption = {
+  id: string;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffAt: string;
+};
+type PlayerOption = { id: string; name: string; teamName: string };
+
+const markets = ref<MarketOption[]>([]);
+const playerMarkets = computed(() => markets.value.filter((m) => m.category === "PLAYER"));
+const selectedMarketId = ref<number | "">("");
+const selectedMarket = computed(
+  () => markets.value.find((m) => m.id === selectedMarketId.value) || null,
+);
+const selectedSelectionId = ref<number | "">("");
+const selectedLineValue = ref<string>("");
+
+const fixtures = ref<FixtureOption[]>([]);
+const fixturesLoading = ref(false);
+const selectedFixtureId = ref<string>("");
+
+const fixturePlayers = ref<{ homeTeam: string; awayTeam: string; players: PlayerOption[] }>({
+  homeTeam: "",
+  awayTeam: "",
+  players: [],
+});
+const playersLoading = ref(false);
+const selectedPlayerId = ref<string>("");
+const manualPlayerName = ref("");
 
 const fetchBookmakers = async () => {
   try {
@@ -404,12 +495,50 @@ const fetchBetTypes = async () => {
   }
 };
 
-const fetchPlayerPropMarkets = async () => {
+const fetchMarkets = async () => {
   try {
-    const res = await api.get("/api/player-prop-markets");
-    playerPropMarkets.value = res.data;
+    const res = await api.get("/api/markets");
+    markets.value = Array.isArray(res.data) ? res.data : [];
   } catch (error) {
-    console.error("Failed to fetch player prop markets:", error);
+    console.error("Failed to fetch markets:", error);
+  }
+};
+
+const fetchFixturesForDate = async (dateValue: string) => {
+  if (!dateValue) {
+    fixtures.value = [];
+    return;
+  }
+  fixturesLoading.value = true;
+  try {
+    const res = await api.get("/api/fixtures", { params: { date: dateValue } });
+    fixtures.value = Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error("Failed to fetch fixtures:", error);
+    fixtures.value = [];
+  } finally {
+    fixturesLoading.value = false;
+  }
+};
+
+const fetchPlayersForFixture = async (fixtureId: string) => {
+  if (!fixtureId || fixtureId === "__manual__") {
+    fixturePlayers.value = { homeTeam: "", awayTeam: "", players: [] };
+    return;
+  }
+  playersLoading.value = true;
+  try {
+    const res = await api.get(`/api/fixtures/${fixtureId}/players`);
+    fixturePlayers.value = {
+      homeTeam: res.data?.homeTeam || "",
+      awayTeam: res.data?.awayTeam || "",
+      players: Array.isArray(res.data?.players) ? res.data.players : [],
+    };
+  } catch (error) {
+    console.error("Failed to fetch players for fixture:", error);
+    fixturePlayers.value = { homeTeam: "", awayTeam: "", players: [] };
+  } finally {
+    playersLoading.value = false;
   }
 };
 
@@ -434,7 +563,7 @@ const buildFilteredTeamSuggestions = (term: string) => {
 const filteredHomeTeamSuggestions = computed(() => buildFilteredTeamSuggestions(homeTeam.value));
 const filteredAwayTeamSuggestions = computed(() => buildFilteredTeamSuggestions(awayTeam.value));
 const filteredPlayerSuggestions = computed(() => {
-  const normalized = String(player.value || "")
+  const normalized = String(manualPlayerName.value || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
@@ -483,7 +612,8 @@ const onUserConfigUpdated = async () => {
 onMounted(() => {
   fetchBookmakers();
   fetchBetTypes();
-  fetchPlayerPropMarkets();
+  fetchMarkets();
+  fetchFixturesForDate(date.value);
   if (authStore.user?.id) {
     void suggestionsStore.preloadSuggestions(authStore.user.id);
   }
@@ -498,6 +628,14 @@ onBeforeUnmount(() => {
 });
 
 const date = ref(new Date().toISOString().substr(0, 10));
+// Add Bet only allows logging a bet up to 7 days in advance of today,
+// matching the server-side cap enforced by GET /api/fixtures.
+const MAX_BET_LOOKAHEAD_DAYS = 7;
+const maxBetDate = computed(() => {
+  const max = new Date();
+  max.setUTCDate(max.getUTCDate() + MAX_BET_LOOKAHEAD_DAYS);
+  return max.toISOString().substr(0, 10);
+});
 const result = ref("Open");
 const fixture = ref("");
 const stakeType = ref("Normal");
@@ -506,9 +644,6 @@ const ftResultOutcome = ref<"Home Win" | "Draw" | "Away Win">("Home Win");
 const homeTeam = ref("");
 const awayTeam = ref("");
 const otherBetType = ref("");
-const player = ref("");
-const playerPropMarket = ref("");
-const playerPropLineWhole = ref(0);
 const stake = ref(5);
 const odds = ref(2);
 const oddsInput = ref("2");
@@ -535,6 +670,7 @@ const syncOddsFields = () => {
 const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) => {
   const keepFixture = Boolean(options?.keepFixture);
   const keepBetType = Boolean(options?.keepBetType);
+  const preservedFixtureId = selectedFixtureId.value;
   const preservedHomeTeam = homeTeam.value.trim();
   const preservedAwayTeam = awayTeam.value.trim();
   const preservedBetType = betType.value;
@@ -544,14 +680,16 @@ const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) =
   stakeType.value = "Normal";
   betType.value = keepBetType ? preservedBetType : userDefaultBetType.value || "Player Prop";
   ftResultOutcome.value = "Home Win";
-  homeTeam.value =
-    keepFixture && betType.value !== "Accumulator" ? preservedHomeTeam : "";
-  awayTeam.value =
-    keepFixture && betType.value !== "Accumulator" ? preservedAwayTeam : "";
+  const keepingFixture = keepFixture && betType.value !== "Accumulator";
+  selectedFixtureId.value = keepingFixture ? preservedFixtureId : "";
+  homeTeam.value = keepingFixture ? preservedHomeTeam : "";
+  awayTeam.value = keepingFixture ? preservedAwayTeam : "";
   otherBetType.value = "";
-  player.value = "";
-  playerPropMarket.value = "";
-  playerPropLineWhole.value = 0;
+  selectedMarketId.value = "";
+  selectedSelectionId.value = "";
+  selectedLineValue.value = "";
+  selectedPlayerId.value = "";
+  manualPlayerName.value = "";
   cashOutValue.value = null;
   normalStake.value = null;
   freeStake.value = null;
@@ -560,6 +698,7 @@ const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) =
   odds.value = 2;
   syncOddsFields();
 };
+
 
 const closeModal = () => {
   showAddAnotherPrompt.value = false;
@@ -605,22 +744,42 @@ const halfStepMarkets = new Set([
 
 const requiresHalfStepLine = (market: string) => halfStepMarkets.has(String(market || ""));
 
+// The currently-selected fixture's team names, whether picked from the
+// dropdown or entered manually via "Other / not listed".
+const currentHomeTeam = computed(() =>
+  selectedFixtureId.value && selectedFixtureId.value !== "__manual__"
+    ? fixtures.value.find((f) => f.id === selectedFixtureId.value)?.homeTeam || ""
+    : homeTeam.value.trim(),
+);
+const currentAwayTeam = computed(() =>
+  selectedFixtureId.value && selectedFixtureId.value !== "__manual__"
+    ? fixtures.value.find((f) => f.id === selectedFixtureId.value)?.awayTeam || ""
+    : awayTeam.value.trim(),
+);
+
+const currentPlayerName = computed(() => {
+  if (selectedPlayerId.value === "__manual__") return manualPlayerName.value.trim();
+  return fixturePlayers.value.players.find((p) => p.id === selectedPlayerId.value)?.name || "";
+});
+
 const getGeneratedDescription = () => {
   if (betType.value === "Accumulator") return "Accumulator";
   if (betType.value === "Bet Builder") return "Bet Builder";
   if (betType.value === "Superboost") return "Superboost";
   if (betType.value === "FT Result") {
     if (ftResultOutcome.value === "Draw") return "Draw";
-    if (ftResultOutcome.value === "Home Win") return `${homeTeam.value.trim()} FT Result`;
-    return `${awayTeam.value.trim()} FT Result`;
+    if (ftResultOutcome.value === "Home Win") return `${currentHomeTeam.value} FT Result`;
+    return `${currentAwayTeam.value} FT Result`;
   }
   if (betType.value === "Other") return otherBetType.value.trim();
 
-  const playerName = player.value.trim();
-  const market = playerPropMarket.value.trim();
-  const line = requiresHalfStepLine(market) ? `${Number(playerPropLineWhole.value)}.5` : "";
-  return [playerName, market, line].filter(Boolean).join(" ");
+  const market = selectedMarket.value;
+  const selectionLabel = market?.selections.find((s) => s.id === selectedSelectionId.value)?.label || "";
+  const line = selectedLineValue.value ? String(selectedLineValue.value) : "";
+  const playerName = market?.requiresPlayer ? currentPlayerName.value : "";
+  return [playerName, market?.name, selectionLabel, line].filter(Boolean).join(" ");
 };
+
 
 const submitBet = async () => {
   try {
@@ -674,25 +833,26 @@ const submitBet = async () => {
         return;
       }
     }
-    if (betType.value !== "Accumulator" && (!homeTeam.value.trim() || !awayTeam.value.trim())) {
-      alert("Home Team and Away Team are required.");
+    if (betType.value !== "Accumulator" && (!currentHomeTeam.value || !currentAwayTeam.value)) {
+      alert("A fixture (or Home/Away team) is required.");
       return;
     }
     if (betType.value === "Player Prop") {
-      if (!player.value.trim()) {
-        alert("Player is required for Player Prop.");
+      if (!selectedMarketId.value) {
+        alert("A market is required for Player Prop.");
         return;
       }
-      if (!playerPropMarket.value.trim()) {
-        alert("Player Prop Market is required.");
+      const market = selectedMarket.value;
+      if (market?.requiresPlayer && !currentPlayerName.value) {
+        alert("Player is required for this market.");
         return;
       }
-      if (
-        requiresHalfStepLine(playerPropMarket.value) &&
-        (!Number.isInteger(Number(playerPropLineWhole.value)) ||
-          Number(playerPropLineWhole.value) < 0)
-      ) {
-        alert("Value must be a whole number on the left side.");
+      if (market && market.selections.length && !selectedSelectionId.value) {
+        alert("A selection is required for this market.");
+        return;
+      }
+      if (market && market.lines.length && !selectedLineValue.value) {
+        alert("A line is required for this market.");
         return;
       }
     }
@@ -702,32 +862,41 @@ const submitBet = async () => {
     }
 
     const generatedDescription = getGeneratedDescription();
+    const isManualFixture = selectedFixtureId.value === "__manual__" || !selectedFixtureId.value;
 
     const payload = {
       fixture:
-        betType.value === "Accumulator"
-          ? "Accumulator"
-          : `${homeTeam.value.trim()} vs ${awayTeam.value.trim()}`,
+        betType.value === "Accumulator" ? "Accumulator" : `${currentHomeTeam.value} vs ${currentAwayTeam.value}`,
       selection: generatedDescription,
       bookmaker: bookie.value,
       stakeType: stakeTypeMapping[stakeType.value] || "NORMAL",
       normalStake: isNormalPlusFree ? Number(normalStake.value) : null,
       betType: betType.value,
-      playerPropMarket: betType.value === "Player Prop" ? playerPropMarket.value : null,
+      playerPropMarket: betType.value === "Player Prop" ? selectedMarket.value?.name || null : null,
       stake: totalStake,
       odds: Number(odds.value),
       potentialReturn: totalStake * Number(odds.value),
       result: resultMapping[result.value],
       cashOutValue: result.value === "Cashed Out" ? Number(cashOutValue.value) : null,
       placedAt: new Date(date.value).toISOString(),
+      fixtureId: betType.value !== "Accumulator" && !isManualFixture ? selectedFixtureId.value : null,
+      marketId: betType.value === "Player Prop" ? selectedMarketId.value || null : null,
+      selectionId: betType.value === "Player Prop" ? selectedSelectionId.value || null : null,
+      lineValue:
+        betType.value === "Player Prop" && selectedLineValue.value ? Number(selectedLineValue.value) : null,
+      playerId:
+        betType.value === "Player Prop" && selectedPlayerId.value && selectedPlayerId.value !== "__manual__"
+          ? selectedPlayerId.value
+          : null,
     };
 
     const res = await api.post("/api/bets", payload);
 
     emit("bet-added", res.data); // send back created bet
 
-    const hasFixture = Boolean(homeTeam.value.trim() && awayTeam.value.trim());
+    const hasFixture = Boolean(currentHomeTeam.value && currentAwayTeam.value);
     const canRepeatFixture = betType.value !== "Accumulator" && hasFixture;
+
     if (canRepeatFixture) {
       pendingAddAnotherRepeat.value = true;
       showAddAnotherPrompt.value = true;
@@ -757,11 +926,37 @@ watch(stakeType, (value) => {
   }
 });
 
+watch(date, (value) => {
+  selectedFixtureId.value = "";
+  fetchFixturesForDate(value);
+});
+
+watch(selectedFixtureId, (value) => {
+  selectedPlayerId.value = "";
+  manualPlayerName.value = "";
+  if (value && value !== "__manual__") {
+    homeTeam.value = "";
+    awayTeam.value = "";
+    fetchPlayersForFixture(value);
+  } else {
+    fixturePlayers.value = { homeTeam: "", awayTeam: "", players: [] };
+  }
+});
+
+watch(selectedMarketId, () => {
+  selectedSelectionId.value = "";
+  selectedLineValue.value = "";
+  selectedPlayerId.value = "";
+  manualPlayerName.value = "";
+});
+
 watch(betType, (value) => {
   if (value !== "Player Prop") {
-    player.value = "";
-    playerPropMarket.value = "";
-    playerPropLineWhole.value = 0;
+    selectedMarketId.value = "";
+    selectedSelectionId.value = "";
+    selectedLineValue.value = "";
+    selectedPlayerId.value = "";
+    manualPlayerName.value = "";
   }
   if (value !== "FT Result") {
     ftResultOutcome.value = "Home Win";
@@ -769,11 +964,13 @@ watch(betType, (value) => {
   if (value === "Accumulator") {
     homeTeam.value = "";
     awayTeam.value = "";
+    selectedFixtureId.value = "";
   }
   if (value !== "Other") {
     otherBetType.value = "";
   }
 });
+
 
 watch(
   () => props.oddsFormat,

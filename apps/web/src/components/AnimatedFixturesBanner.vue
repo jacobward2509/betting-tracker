@@ -24,7 +24,14 @@ const formatKickoffTime = (value: string): string => {
 
 const loadFixtures = async () => {
   try {
-    const response = await api.get<Fixture[]>("/api/fixtures/today");
+    // Pass the viewer's own UTC offset (Date.getTimezoneOffset() sign
+    // convention: positive = behind UTC, negative = ahead) so "today" is
+    // resolved against their local calendar day rather than the server's
+    // UTC clock — otherwise an evening UTC kickoff the server still counts
+    // as "today" could already be "tomorrow" for a viewer further east.
+    const response = await api.get<Fixture[]>("/api/fixtures/today", {
+      params: { tzOffsetMinutes: new Date().getTimezoneOffset() },
+    });
     fixtures.value = Array.isArray(response.data) ? response.data : [];
   } catch {
     // Fail silently — the banner is a non-critical enhancement on the auth
