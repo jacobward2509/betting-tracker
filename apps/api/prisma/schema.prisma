@@ -21,6 +21,14 @@ model Bet {
   stake            Decimal
   normalStake      Decimal?
   odds             Decimal
+  // Optional odds-boost percentage applied when creating/editing the bet.
+  // `odds` above always stores the final *boosted* decimal odds (so
+  // potentialReturn/profit keep being derived the same way they always
+  // have, straight from `odds`) -- this column exists purely so the
+  // Add/Edit Bet UI can redisplay the original pre-boost odds and the
+  // boost percentage itself when a previously-boosted bet is edited again.
+  // Purely additive: NULL means no boost was applied.
+  oddsBoostPercent Decimal?
   potentialReturn  Decimal
   result           BetResult @default(OPEN)
   cashOutValue     Decimal?

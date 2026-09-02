@@ -1170,6 +1170,10 @@ app.post('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req
   }
 
   data.odds = odds;
+  data.oddsBoostPercent = (() => {
+    const boost = toNumberOrNull(data.oddsBoostPercent);
+    return boost !== null && boost > 0 ? boost : null;
+  })();
   if (data.stakeType === 'NORMAL_PLUS_FREE') {
     if (stake === null || normalStake === null) {
       return res
@@ -1289,6 +1293,10 @@ app.put('/api/bets/:id', requireAuth, asyncHandler<AuthenticatedRequest>(async (
   }
 
   data.odds = odds;
+  data.oddsBoostPercent = (() => {
+    const boost = toNumberOrNull(data.oddsBoostPercent);
+    return boost !== null && boost > 0 ? boost : null;
+  })();
   if (data.stakeType === 'NORMAL_PLUS_FREE') {
     if (stake === null || normalStake === null) {
       return res

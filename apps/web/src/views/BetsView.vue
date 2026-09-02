@@ -137,7 +137,8 @@ const sanitizeTableState = (value: unknown): PersistedTableState => {
   const parsedPageSize = Number(source.pageSize);
   const nextPageSize = validPageSizes.has(parsedPageSize) ? parsedPageSize : 10;
   const parsedCurrentPage = Number(source.currentPage);
-  const nextCurrentPage = Number.isInteger(parsedCurrentPage) && parsedCurrentPage > 0 ? parsedCurrentPage : 1;
+  const nextCurrentPage =
+    Number.isInteger(parsedCurrentPage) && parsedCurrentPage > 0 ? parsedCurrentPage : 1;
 
   return {
     sortKey: nextSortKey,
@@ -180,7 +181,9 @@ const fetchBets = async () => {
   try {
     const res = await api.get("/api/bets");
     bets.value = res.data || [];
-    const existingIds = new Set((bets.value as Array<Record<string, any>>).map((bet) => String(bet.id)));
+    const existingIds = new Set(
+      (bets.value as Array<Record<string, any>>).map((bet) => String(bet.id)),
+    );
     selectedBetIds.value = selectedBetIds.value.filter((id) => existingIds.has(id));
   } catch (error: any) {
     if (error?.response?.status === 401) {
@@ -388,7 +391,6 @@ const getSelectionTooltip = (bet: Record<string, any>) => {
   return condensed.isCondensed ? condensed.full : undefined;
 };
 
-
 const getProfitClass = (profit: unknown) => {
   const value = Number(profit);
   if (!Number.isFinite(value)) return "text-gray-900 dark:text-white";
@@ -508,7 +510,6 @@ const favouriteBookie = computed(() => {
   }
   return topBookie;
 });
-
 
 const filteredBets = computed(() => {
   const list = bets.value as Array<Record<string, any>>;
@@ -665,7 +666,10 @@ const resultLabelToApi: Record<string, string> = {
 
 const applyBulkResult = async () => {
   if (!selectedBetIds.value.length || isApplyingBulkResult.value) return;
-  if (bulkResult.value === "Cashed Out" && (bulkCashOutValue.value == null || bulkCashOutValue.value < 0)) {
+  if (
+    bulkResult.value === "Cashed Out" &&
+    (bulkCashOutValue.value == null || bulkCashOutValue.value < 0)
+  ) {
     alert("Please enter a valid Cash Out value for Cashed Out.");
     return;
   }
@@ -740,26 +744,23 @@ watch(
   { deep: true },
 );
 
-watch(
-  [sortKey, sortDirection, pageSize, currentPage],
-  () => {
-    try {
-      localStorage.setItem(
-        TABLE_STATE_STORAGE_KEY,
-        JSON.stringify(
-          sanitizeTableState({
-            sortKey: sortKey.value,
-            sortDirection: sortDirection.value,
-            pageSize: pageSize.value,
-            currentPage: currentPage.value,
-          }),
-        ),
-      );
-    } catch {
-      // ignore localStorage write errors
-    }
-  },
-);
+watch([sortKey, sortDirection, pageSize, currentPage], () => {
+  try {
+    localStorage.setItem(
+      TABLE_STATE_STORAGE_KEY,
+      JSON.stringify(
+        sanitizeTableState({
+          sortKey: sortKey.value,
+          sortDirection: sortDirection.value,
+          pageSize: pageSize.value,
+          currentPage: currentPage.value,
+        }),
+      ),
+    );
+  } catch {
+    // ignore localStorage write errors
+  }
+});
 
 watch(
   () => filters.value.season,
@@ -798,7 +799,9 @@ const columnOptions: Array<{
         </div>
         <div class="text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400">Favourite Bookie</p>
-          <p class="font-semibold text-gray-900 dark:text-gray-100">{{ getBookmakerLabel(String(favouriteBookie || "")) }}</p>
+          <p class="font-semibold text-gray-900 dark:text-gray-100">
+            {{ getBookmakerLabel(String(favouriteBookie || "")) }}
+          </p>
         </div>
         <div class="text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400">Total P/L</p>
@@ -981,6 +984,12 @@ const columnOptions: Array<{
             <p class="text-gray-500 dark:text-gray-400">Odds</p>
             <p class="font-semibold text-gray-900 dark:text-gray-100">
               {{ formatOddsForDisplay(Number(bet.odds), oddsFormat) }}
+              <span
+                v-if="bet.oddsBoostPercent"
+                class="ml-1 text-[10px] font-semibold text-green-600 dark:text-green-400"
+              >
+                +{{ Number(bet.oddsBoostPercent) }}%
+              </span>
             </p>
           </div>
           <div class="rounded bg-gray-50 px-2 py-1 dark:bg-gray-800">
@@ -1135,7 +1144,11 @@ const columnOptions: Array<{
                 {{ getBookmakerLabel(String(bet.bookmaker || "")) }}
               </span>
             </td>
-            <td v-if="visibleColumns.description" class="px-6 py-4" :title="getSelectionTooltip(bet)">
+            <td
+              v-if="visibleColumns.description"
+              class="px-6 py-4"
+              :title="getSelectionTooltip(bet)"
+            >
               {{ getCondensedDisplaySelection(bet) }}
             </td>
             <td v-if="visibleColumns.stakeType" class="px-6 py-4">
@@ -1149,6 +1162,12 @@ const columnOptions: Array<{
             <td v-if="visibleColumns.stake" class="px-6 py-4">{{ `£ ${Number(bet.stake)}` }}</td>
             <td v-if="visibleColumns.odds" class="px-6 py-4">
               {{ formatOddsForDisplay(Number(bet.odds), oddsFormat) }}
+              <span
+                v-if="bet.oddsBoostPercent"
+                class="ml-1 text-[10px] font-semibold text-green-600 dark:text-green-400"
+              >
+                +{{ Number(bet.oddsBoostPercent) }}%
+              </span>
             </td>
             <td v-if="visibleColumns.result" class="px-6 py-4">
               <span

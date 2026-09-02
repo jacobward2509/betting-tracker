@@ -321,6 +321,31 @@
             </div>
           </div>
 
+          <div>
+            <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+              <input
+                v-model="isOddsBoost"
+                type="checkbox"
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                data-test-id="input-odds-boost-checkbox"
+              />
+              Odds Boost?
+            </label>
+            <div v-if="isOddsBoost" class="mt-2">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Boost (%)</label>
+              <input
+                v-model.number="oddsBoostPercent"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 25"
+                class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+                data-test-id="input-odds-boost-percent"
+              />
+            </div>
+          </div>
+
           <div class="grid gap-3 sm:grid-cols-2">
             <div :class="result === 'Cashed Out' ? '' : 'sm:col-span-2'">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Result</label>
@@ -418,6 +443,7 @@ import { groupFixturesByLeague } from "@/utils/fixtureGrouping";
 
 
 import {
+  applyOddsBoost,
   decimalToFractionalOdds,
   formatOddsForDisplay,
   normalizeOddsPrecision,
@@ -789,6 +815,8 @@ const odds = ref(2);
 const oddsInput = ref("2");
 const oddsNumerator = ref(1);
 const oddsDenominator = ref(1);
+const isOddsBoost = ref(false);
+const oddsBoostPercent = ref<number | null>(null);
 const cashOutValue = ref<number | null>(null);
 const normalStake = ref<number | null>(null);
 const freeStake = ref<number | null>(null);
@@ -841,6 +869,8 @@ const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) =
   result.value = "Open";
   stake.value = userDefaultStake.value;
   odds.value = 2;
+  isOddsBoost.value = false;
+  oddsBoostPercent.value = null;
   syncOddsFields();
 };
 
@@ -953,6 +983,18 @@ const submitBet = async () => {
     }
     odds.value = parsedOdds;
 
+    if (isOddsBoost.value && (oddsBoostPercent.value == null || Number(oddsBoostPercent.value) <= 0)) {
+      alert("Please enter a valid Odds Boost percentage.");
+      return;
+    }
+    const finalOdds = isOddsBoost.value
+      ? applyOddsBoost(odds.value, Number(oddsBoostPercent.value))
+      : odds.value;
+    if (finalOdds == null) {
+      alert("Please enter valid odds.");
+      return;
+    }
+
     if (result.value === "Cashed Out" && (cashOutValue.value == null || cashOutValue.value < 0)) {
       alert("Please enter a valid Cash Out value.");
       return;
@@ -1020,8 +1062,9 @@ const submitBet = async () => {
       betType: betType.value,
       playerPropMarket: isMarketBetType.value ? selectedMarket.value?.name || null : null,
       stake: totalStake,
-      odds: Number(odds.value),
-      potentialReturn: totalStake * Number(odds.value),
+      odds: Number(finalOdds),
+      oddsBoostPercent: isOddsBoost.value ? Number(oddsBoostPercent.value) : null,
+      potentialReturn: totalStake * Number(finalOdds),
       result: resultMapping[result.value],
       cashOutValue: result.value === "Cashed Out" ? Number(cashOutValue.value) : null,
       placedAt: new Date(date.value).toISOString(),

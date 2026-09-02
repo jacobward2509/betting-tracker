@@ -82,3 +82,22 @@ export const normalizeOddsPrecision = (value: number): number | null => {
   if (!Number.isFinite(value)) return null;
   return Math.round(value * DECIMAL_PRECISION_FACTOR) / DECIMAL_PRECISION_FACTOR;
 };
+
+// An odds boost only inflates the "profit" portion of decimal odds (odds -
+// 1), not the stake return itself. e.g. stake 10, odds 2.8, 25% boost:
+// profit portion (2.8 - 1) = 1.8, boosted profit portion = 1.8 * 1.25 =
+// 2.25, boosted odds = 3.25, boosted return = 10 * 3.25 = 32.5.
+export const applyOddsBoost = (baseOdds: number, boostPercent: number): number | null => {
+  if (!Number.isFinite(baseOdds) || baseOdds < 1) return null;
+  if (!Number.isFinite(boostPercent) || boostPercent <= 0) return normalizeOddsPrecision(baseOdds);
+  return normalizeOddsPrecision(1 + (baseOdds - 1) * (1 + boostPercent / 100));
+};
+
+// Inverse of applyOddsBoost — recovers the original (pre-boost) odds from a
+// stored boosted odds value and the boost percentage, so the Edit Bet
+// modal can redisplay what the user originally entered.
+export const removeOddsBoost = (boostedOdds: number, boostPercent: number): number | null => {
+  if (!Number.isFinite(boostedOdds) || boostedOdds < 1) return null;
+  if (!Number.isFinite(boostPercent) || boostPercent <= 0) return normalizeOddsPrecision(boostedOdds);
+  return normalizeOddsPrecision(1 + (boostedOdds - 1) / (1 + boostPercent / 100));
+};
