@@ -196,14 +196,37 @@ model Player {
   @@index([teamSportsDbId])
 }
 
+// Curated, industry-led list of UK-facing bookmakers (rebuilt from scratch —
+// see migration 20260903000000_rebuild_bookmaker_catalog). Every member is
+// intentionally a plain no-space identifier so no @map(...) is required
+// anywhere in this enum; apps/web/src/utils/bookmaker.ts's
+// formatBookmakerLabel() is solely responsible for inserting spaces/casing
+// for display (e.g. PaddyPower -> "Paddy Power", EightEightEightSport ->
+// "888sport").
 enum Bookmaker {
   Bet365
   Betfair
   BetUK
   Ladbrokes
-  PaddyPower  @map("Paddy Power")
+  PaddyPower
   SkyBet
-  WilliamHill @map("William Hill")
+  WilliamHill
+  Coral
+  BetVictor
+  Betfred
+  EightEightEightSport
+  Unibet
+  LiveScoreBet
+  BoyleSports
+  VirginBet
+  Betway
+  ThirtyTwoRed
+  GrosvenorSport
+  QuinnBet
+  Spreadex
+  MansionBet
+  StarSports
+  CasumoBet
 }
 
 enum StakeType {

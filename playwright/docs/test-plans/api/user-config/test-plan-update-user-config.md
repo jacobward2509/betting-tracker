@@ -124,7 +124,7 @@ the generic defaults:
   `auth-endpoints-v2.spec.ts`.
 - Scenarios 3, 4, 5, 6, and 7 each need a preceding `PUT`/`GET` call to establish a known
   starting config before asserting the change (or non-change); use the fresh account's
-  auto-provisioned defaults (all 7 bookmakers enabled, `Player Prop`/`5`) as the known
+  auto-provisioned defaults (all 23 bookmakers enabled, `Player Prop`/`5`) as the known
   starting point rather than assuming any other implicit state.
 - Reuse the `assertUserConfigSchema` schema-assertion helper already added at
   `support/endpoint-schema-assertions/user-config/get-user-config.ts` for every `200`

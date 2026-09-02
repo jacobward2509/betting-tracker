@@ -3,10 +3,10 @@ import Ajv, {ValidateFunction} from 'ajv'
 
 const ajv = new Ajv({allErrors: true, strict: false})
 
-// Mirrors components.schemas.Bookmaker in apps/api/openapi/user-config.yaml — the 7
+// Mirrors components.schemas.Bookmaker in apps/api/openapi/user-config.yaml — the 23
 // tracked bookmakers, matching the Bookmaker enum in apps/api/prisma/schema.prisma.
-// Wire values use the Prisma enum member names (no spaces), e.g. "PaddyPower" not
-// "Paddy Power".
+// Wire values use the Prisma enum member names (plain, no-space identifiers), e.g.
+// "PaddyPower" not "Paddy Power".
 const BOOKMAKER_ENUM = [
   'Bet365',
   'Betfair',
@@ -14,8 +14,25 @@ const BOOKMAKER_ENUM = [
   'Ladbrokes',
   'PaddyPower',
   'SkyBet',
-  'WilliamHill'
+  'WilliamHill',
+  'Coral',
+  'BetVictor',
+  'Betfred',
+  'EightEightEightSport',
+  'Unibet',
+  'LiveScoreBet',
+  'BoyleSports',
+  'VirginBet',
+  'Betway',
+  'ThirtyTwoRed',
+  'GrosvenorSport',
+  'QuinnBet',
+  'Spreadex',
+  'MansionBet',
+  'StarSports',
+  'CasumoBet'
 ]
+
 
 // Mirrors components.schemas.UserConfigResponse in apps/api/openapi/user-config.yaml —
 // returned by both GET /api/user/config and (on the same shape) PUT /api/user/config.

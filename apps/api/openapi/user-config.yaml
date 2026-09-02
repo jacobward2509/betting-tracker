@@ -150,10 +150,11 @@ components:
       type: string
       description: >
         One of the tracked bookmakers, matching the `Bookmaker` enum in
-        `apps/api/prisma/schema.prisma`. Note the API's wire values use the
-        Prisma enum member names (no spaces), not the `@map`-ped display
-        labels — e.g. "Paddy Power" is sent/received as `PaddyPower`, and
-        "William Hill" as `WilliamHill` (see
+        `apps/api/prisma/schema.prisma`. Every value is a plain, no-space
+        Prisma enum member name — none require `@map`-ped display labels — so
+        the wire value is exactly the same as the enum token, e.g. "Paddy
+        Power" is sent/received as `PaddyPower`, "William Hill" as
+        `WilliamHill`, and "888sport" as `EightEightEightSport` (see
         apps/web/src/utils/bookmaker.ts's formatBookmakerLabel for the
         client-side display-label mapping).
       enum:
@@ -164,6 +165,22 @@ components:
         - PaddyPower
         - SkyBet
         - WilliamHill
+        - Coral
+        - BetVictor
+        - Betfred
+        - EightEightEightSport
+        - Unibet
+        - LiveScoreBet
+        - BoyleSports
+        - VirginBet
+        - Betway
+        - ThirtyTwoRed
+        - GrosvenorSport
+        - QuinnBet
+        - Spreadex
+        - MansionBet
+        - StarSports
+        - CasumoBet
       example: Bet365
 
     BookmakerAvailability:

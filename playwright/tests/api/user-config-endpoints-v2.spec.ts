@@ -49,7 +49,7 @@ test.describe('User Config endpoints-V2', () => {
 
         expect(
           Array.isArray(body.bookmakers) && body.bookmakers.length === BOOKMAKER_ENUM.length,
-          'bookmakers should contain exactly the 7 tracked bookmakers',
+          'bookmakers should contain exactly the 23 tracked bookmakers',
         ).toBe(true);
 
         const expectedEnabled = body.bookmakers
@@ -106,7 +106,7 @@ test.describe('User Config endpoints-V2', () => {
         ).toBe(true);
         expect(
           [...body.enabledBookmakers].sort(),
-          'enabledBookmakers should contain all 7 tracked bookmakers',
+          'enabledBookmakers should contain all 23 tracked bookmakers',
         ).toEqual([...BOOKMAKER_ENUM].sort());
       });
     });

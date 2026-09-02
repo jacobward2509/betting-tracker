@@ -43,7 +43,7 @@ test.describe('Top Banner - Bet Preferences', () => {
     await expect(topBannerPage.defaultStakeInput, 'Default Stake input should be visible').toBeVisible();
   });
 
-  test('Enabled Bookmakers checkboxes reflect all 7 tracked bookmakers, all enabled by default for a new account', async ({
+  test('Enabled Bookmakers checkboxes reflect all 23 tracked bookmakers, all enabled by default for a new account', async ({
     page,
   }) => {
     const topBannerPage = new TopBannerPage(page);
@@ -69,6 +69,7 @@ test.describe('Top Banner - Bet Preferences', () => {
 
     const bookmakersExceptLast = TopBannerPage.EXPECTED_BOOKMAKERS.slice(0, -1);
     const lastBookmaker = TopBannerPage.EXPECTED_BOOKMAKERS[TopBannerPage.EXPECTED_BOOKMAKERS.length - 1];
+    const lastBookmakerLabel = TopBannerPage.EXPECTED_BOOKMAKER_LABELS[TopBannerPage.EXPECTED_BOOKMAKER_LABELS.length - 1];
 
     for (const bookmaker of bookmakersExceptLast) {
       await topBannerPage.toggleBookmaker(bookmaker);
@@ -89,7 +90,7 @@ test.describe('Top Banner - Bet Preferences', () => {
     await expect(
       topBannerPage.defaultBookmakerSelect.locator('option'),
       'Default Bookmaker select should only offer the one remaining bookmaker',
-    ).toHaveText([lastBookmaker]);
+    ).toHaveText([lastBookmakerLabel]);
   });
 
   test('Default Bookmaker auto-reassigns when the current default is disabled', async ({ page }) => {

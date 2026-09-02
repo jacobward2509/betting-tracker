@@ -15,8 +15,24 @@ export type Bookmaker =
   | 'PaddyPower'
   | 'SkyBet'
   | 'WilliamHill'
+  | 'Coral'
+  | 'BetVictor'
+  | 'Betfred'
+  | 'EightEightEightSport'
+  | 'Unibet'
+  | 'LiveScoreBet'
+  | 'BoyleSports'
+  | 'VirginBet'
+  | 'Betway'
+  | 'ThirtyTwoRed'
+  | 'GrosvenorSport'
+  | 'QuinnBet'
+  | 'Spreadex'
+  | 'MansionBet'
+  | 'StarSports'
+  | 'CasumoBet'
 
-// Mirrors components.schemas.Bookmaker in apps/api/openapi/user-config.yaml — the 7
+// Mirrors components.schemas.Bookmaker in apps/api/openapi/user-config.yaml — the 23
 // tracked bookmakers, matching the Bookmaker enum in apps/api/prisma/schema.prisma.
 export const BOOKMAKER_ENUM: readonly Bookmaker[] = [
   'Bet365',
@@ -25,8 +41,25 @@ export const BOOKMAKER_ENUM: readonly Bookmaker[] = [
   'Ladbrokes',
   'PaddyPower',
   'SkyBet',
-  'WilliamHill'
+  'WilliamHill',
+  'Coral',
+  'BetVictor',
+  'Betfred',
+  'EightEightEightSport',
+  'Unibet',
+  'LiveScoreBet',
+  'BoyleSports',
+  'VirginBet',
+  'Betway',
+  'ThirtyTwoRed',
+  'GrosvenorSport',
+  'QuinnBet',
+  'Spreadex',
+  'MansionBet',
+  'StarSports',
+  'CasumoBet'
 ]
+
 
 // A tracked bet type (from the BetTypes table) distinct from the platform default
 // ("Player Prop"), used to prove an update actually changed the value rather than
@@ -43,7 +76,7 @@ export interface UpdateUserConfigRequestBody {
 /**
  * A complete UpdateUserConfigRequest body with all four fields populated to valid
  * values, for comprehensive positive testing. `enabledBookmakers` is narrowed to a
- * 3-bookmaker subset (rather than all 7) so the "fully replaces the previous set"
+ * 3-bookmaker subset (rather than all 23) so the "fully replaces the previous set"
  * behavior is observable against the platform's all-enabled default.
  */
 export function maximumUpdateUserConfigBody(): UpdateUserConfigRequestBody {

@@ -25,6 +25,32 @@
             />
           </div>
 
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
+            <select
+              v-model="betType"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-bet-type"
+            >
+              <option disabled value="">Select bet type</option>
+              <option v-for="b in betTypes" :key="b.id" :value="b.betTypes">
+                {{ b.betTypes }}
+              </option>
+            </select>
+          </div>
+
+          <div v-if="betType === 'Other'">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
+            <input
+              v-model="otherBetType"
+              type="text"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-other-bet-type"
+            />
+          </div>
+
           <div v-if="betType !== 'Accumulator'">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
             <select
@@ -33,12 +59,14 @@
               required
               data-test-id="input-fixture"
             >
-              <option value="">
+              <option disabled value="">
                 {{ fixturesLoading ? "Loading fixtures..." : "Select fixture" }}
               </option>
-              <option v-for="f in fixtures" :key="f.id" :value="f.id">
-                {{ f.homeTeam }} vs {{ f.awayTeam }}
-              </option>
+              <optgroup v-for="group in fixturesByLeague" :key="group.league" :label="group.label">
+                <option v-for="f in group.fixtures" :key="f.id" :value="f.id">
+                  {{ f.homeTeam }} vs {{ f.awayTeam }}
+                </option>
+              </optgroup>
               <option value="__manual__">Other / not listed</option>
             </select>
 
@@ -71,33 +99,7 @@
             </datalist>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
-            <select
-              v-model="betType"
-              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              required
-              data-test-id="input-bet-type"
-            >
-              <option disabled value="">Select bet type</option>
-              <option v-for="b in betTypes" :key="b.id" :value="b.betTypes">
-                {{ b.betTypes }}
-              </option>
-            </select>
-          </div>
-
-          <div v-if="betType === 'Other'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
-            <input
-              v-model="otherBetType"
-              type="text"
-              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              required
-              data-test-id="input-other-bet-type"
-            />
-          </div>
-
-          <div v-if="isMarketBetType">
+          <div v-if="isMarketBetType && hasFixtureSelected">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Market</label>
             <select
               v-model="selectedMarketId"
@@ -112,6 +114,7 @@
             </select>
           </div>
 
+
           <div v-if="isMarketBetType && selectedMarket && selectedMarket.requiresPlayer">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Player</label>
             <select
@@ -120,7 +123,7 @@
               required
               data-test-id="input-player"
             >
-              <option value="">
+              <option disabled value="">
                 {{ playersLoading ? "Loading players..." : "Select player" }}
               </option>
               <optgroup v-if="fixturePlayers.homeTeam" :label="fixturePlayers.homeTeam">
@@ -429,6 +432,7 @@ type FixtureOption = {
   homeTeam: string;
   awayTeam: string;
   kickoffAt: string;
+  league: string;
 };
 type PlayerOption = { id: string; name: string; teamName: string };
 
@@ -462,6 +466,83 @@ const selectedLineValue = ref<string>("");
 const fixtures = ref<FixtureOption[]>([]);
 const fixturesLoading = ref(false);
 const selectedFixtureId = ref<string>("");
+
+// Priority order for grouping the Fixture dropdown by league — matches the
+// `League` enum in apps/api/prisma/schema.prisma. Any league not explicitly
+// listed here (EFL_CUP, FA_CUP, EUROPA_LEAGUE, CONFERENCE_LEAGUE) falls back
+// to this same enum order, appended after the explicitly-prioritized leagues
+// rather than being dropped from the dropdown.
+const LEAGUE_SORT_ORDER = [
+  "PREMIER_LEAGUE",
+  "CHAMPIONSHIP",
+  "LA_LIGA",
+  "BUNDESLIGA",
+  "LIGUE_1",
+  "SERIE_A",
+  "CHAMPIONS_LEAGUE",
+  "EFL_CUP",
+  "FA_CUP",
+  "EUROPA_LEAGUE",
+  "CONFERENCE_LEAGUE",
+];
+
+const LEAGUE_LABELS: Record<string, string> = {
+  PREMIER_LEAGUE: "Premier League",
+  CHAMPIONSHIP: "Championship",
+  LA_LIGA: "La Liga",
+  BUNDESLIGA: "Bundesliga",
+  LIGUE_1: "Ligue 1",
+  SERIE_A: "Serie A",
+  CHAMPIONS_LEAGUE: "Champions League",
+  EFL_CUP: "EFL Cup",
+  FA_CUP: "FA Cup",
+  EUROPA_LEAGUE: "Europa League",
+  CONFERENCE_LEAGUE: "Conference League",
+};
+
+const formatLeagueLabel = (league: string) => LEAGUE_LABELS[league] || league;
+
+const leagueSortIndex = (league: string) => {
+  const index = LEAGUE_SORT_ORDER.indexOf(league);
+  return index === -1 ? LEAGUE_SORT_ORDER.length : index;
+};
+
+// Groups fixtures into <optgroup> sections for the Fixture select, ordered
+// by league priority (Premier League first, then Championship, La Liga,
+// Bundesliga, Ligue 1, Serie A, Champions League, then any remaining
+// tracked competitions), with fixtures within each league kept in their
+// existing kickoff-time-ascending order from the API response.
+const fixturesByLeague = computed(() => {
+  const groups = new Map<string, FixtureOption[]>();
+  for (const fixture of fixtures.value) {
+    const existing = groups.get(fixture.league);
+    if (existing) {
+      existing.push(fixture);
+    } else {
+      groups.set(fixture.league, [fixture]);
+    }
+  }
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => leagueSortIndex(a) - leagueSortIndex(b))
+    .map(([league, leagueFixtures]) => ({
+      league,
+      label: formatLeagueLabel(league),
+      fixtures: leagueFixtures,
+    }));
+});
+
+// True once a fixture has actually been chosen — either a listed fixture or
+// the manual "Other / not listed" entry with both team names filled in.
+// Gates the Market field below so it isn't shown before a fixture exists to
+// scope the market to.
+const hasFixtureSelected = computed(() => {
+  if (!selectedFixtureId.value) return false;
+  if (selectedFixtureId.value === "__manual__") {
+    return Boolean(homeTeam.value.trim() && awayTeam.value.trim());
+  }
+  return true;
+});
+
 
 const fixturePlayers = ref<{ homeTeam: string; awayTeam: string; players: PlayerOption[] }>({
   homeTeam: "",
