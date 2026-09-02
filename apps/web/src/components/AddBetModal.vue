@@ -481,6 +481,14 @@ const isMarketBetType = computed(() => betType.value === "Player Prop" || betTyp
 const isMultiLegBetType = computed(
   () => betType.value === "Accumulator" || betType.value === "Bet Builder" || betType.value === "Cross Match Bet Builder",
 );
+// Of the three multi-leg bet types, only Accumulator and Cross Match Bet
+// Builder can have legs spread across several different days (e.g. a
+// Saturday + Sunday fixture in the same bet), so only those two need the
+// wider multi-day fixture window below. Bet Builder is always a single
+// fixture, so it only ever needs fixtures from the bet’s own Date field.
+const isMultiDateBetType = computed(
+  () => betType.value === "Accumulator" || betType.value === "Cross Match Bet Builder",
+);
 const legs = ref<Record<string, any>[]>([]);
 const legsValid = ref(false);
 const legsEditorKey = ref(0);
@@ -662,6 +670,47 @@ const fetchFixturesForDate = async (dateValue: string) => {
   }
 };
 
+// Multi-leg bet types (Accumulator / Cross Match Bet Builder) can draw legs
+// from fixtures spanning several days (e.g. a Saturday + Sunday fixture in
+// the same bet), so their fixture list is fetched as a window centered on
+// the bet's Date field (+/- 7 days) rather than that single day, via the
+// from/to range form of GET /api/fixtures. The future edge is still capped
+// at maxBetDate, matching the API's own MAX_FIXTURE_LOOKAHEAD_DAYS cap.
+const FIXTURE_RANGE_LOOKBACK_DAYS = 7;
+const fetchFixturesForRangeAround = async (centerDateValue: string) => {
+  if (!centerDateValue) {
+    fixtures.value = [];
+    return;
+  }
+  const center = new Date(`${centerDateValue}T00:00:00Z`);
+  if (!Number.isFinite(center.getTime())) {
+    fixtures.value = [];
+    return;
+  }
+  const from = new Date(center);
+  from.setUTCDate(from.getUTCDate() - FIXTURE_RANGE_LOOKBACK_DAYS);
+  const to = new Date(center);
+  to.setUTCDate(to.getUTCDate() + FIXTURE_RANGE_LOOKBACK_DAYS);
+  const maxFuture = new Date(`${maxBetDate.value}T00:00:00Z`);
+  const cappedTo = to.getTime() > maxFuture.getTime() ? maxFuture : to;
+
+  fixturesLoading.value = true;
+  try {
+    const res = await api.get("/api/fixtures", {
+      params: { from: from.toISOString().slice(0, 10), to: cappedTo.toISOString().slice(0, 10) },
+    });
+    fixtures.value = Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error("Failed to fetch fixtures:", error);
+    fixtures.value = [];
+  } finally {
+    fixturesLoading.value = false;
+  }
+};
+
+const fetchFixturesForLegs = async (dateValue: string) =>
+  isMultiDateBetType.value ? fetchFixturesForRangeAround(dateValue) : fetchFixturesForDate(dateValue);
+
 const fetchPlayersForFixture = async (fixtureId: string) => {
   if (!fixtureId || fixtureId === "__manual__") {
     fixturePlayers.value = { homeTeam: "", awayTeam: "", players: [] };
@@ -754,7 +803,7 @@ onMounted(() => {
   fetchBookmakers();
   fetchBetTypes();
   fetchMarkets();
-  fetchFixturesForDate(date.value);
+  fetchFixturesForLegs(date.value);
   if (authStore.user?.id) {
     void suggestionsStore.preloadSuggestions(authStore.user.id);
   }
@@ -1077,7 +1126,7 @@ watch(stakeType, (value) => {
 
 watch(date, (value) => {
   selectedFixtureId.value = "";
-  fetchFixturesForDate(value);
+  fetchFixturesForLegs(value);
 });
 
 watch(selectedFixtureId, (value) => {
@@ -1126,6 +1175,15 @@ watch(betType, (value) => {
     otherBetType.value = "";
   }
 });
+
+// Accumulator/Cross Match Bet Builder need a multi-day fixture window while
+// every other bet type (including Bet Builder) needs only the single
+// Date-field day — refetch whenever a bet-type change crosses that boundary
+// in either direction.
+watch(isMultiDateBetType, () => {
+  fetchFixturesForLegs(date.value);
+});
+
 
 
 watch(

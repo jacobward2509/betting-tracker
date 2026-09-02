@@ -26,10 +26,11 @@
           {{ fixturesLoading ? "Loading fixtures..." : "Select fixture" }}
         </option>
         <option v-for="f in fixtures" :key="f.id" :value="f.id">
-          {{ f.homeTeam }} vs {{ f.awayTeam }}
+          {{ fixtureOptionLabel(f) }}
         </option>
       </select>
     </div>
+
 
     <div
       v-for="(leg, index) in legs"
@@ -67,8 +68,9 @@
             :key="f.id"
             :value="f.id"
           >
-            {{ f.homeTeam }} vs {{ f.awayTeam }}
+            {{ fixtureOptionLabel(f) }}
           </option>
+
         </select>
         <p v-if="fixtureConflictMessage(index)" class="mt-1 text-xs text-red-600 dark:text-red-400">
           {{ fixtureConflictMessage(index) }}
@@ -308,6 +310,26 @@ const availableFixturesForLeg = (index: number): FixtureOption[] => {
     return props.fixtures.filter((f) => !usedElsewhere.has(f.id));
   }
   return props.fixtures;
+};
+
+// Fixture options can now span multiple days (Accumulator / Cross Match Bet
+// Builder legs are no longer confined to a single day's fixtures — see
+// AddBetModal/EditBetModal's from/to range fetch), so the option label
+// includes the kickoff date whenever the fixture list spans more than one
+// calendar day, keeping the dropdown scannable without a date prefix on
+// every option in the common single-day case.
+const fixtureDates = computed(() => new Set(props.fixtures.map((f) => f.kickoffAt.slice(0, 10))));
+const fixtureOptionLabel = (fixture: FixtureOption): string => {
+  const matchup = `${fixture.homeTeam} vs ${fixture.awayTeam}`;
+  if (fixtureDates.value.size <= 1) return matchup;
+  const kickoff = new Date(fixture.kickoffAt);
+  if (!Number.isFinite(kickoff.getTime())) return matchup;
+  const dateLabel = kickoff.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+  return `${dateLabel} — ${matchup}`;
 };
 
 

@@ -6,7 +6,12 @@
         class="bg-white rounded-lg shadow-lg w-full max-w-md mx-auto max-h-[calc(100vh-2rem)] overflow-y-auto dark:bg-gray-900"
       >
         <div class="flex items-center justify-between p-4 border-b dark:border-gray-700">
-          <h3 class="text-lg font-medium text-gray-800 dark:text-gray-100">Edit Bet - {{ bet.selection }}</h3>
+          <h3
+            class="text-lg font-medium text-gray-800 dark:text-gray-100"
+            :title="editTitleTooltip"
+          >
+            Edit Bet - {{ editTitleSelection }}
+          </h3>
           <button @click="closeModal" class="text-gray-500 hover:text-gray-700 text-xl dark:text-gray-400 dark:hover:text-gray-200">
             &times;
           </button>
@@ -314,6 +319,8 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import api from "@/lib/api";
 import BetLegsEditor from "@/components/BetLegsEditor.vue";
+import { getCondensedSelection } from "@/utils/betSelection";
+
 
 import {
   decimalToFractionalOdds,
@@ -332,6 +339,18 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits(["update:modelValue", "bet-updated"]);
+
+// Condenses the modal title for multi-leg bets (Accumulator / Bet Builder /
+// Cross Match Bet Builder) the same way the Bets table does, so a bet with
+// many legs doesn't blow out the header width -- the full text remains
+// available via the title's native tooltip.
+const editTitleCondensed = computed(() =>
+  getCondensedSelection(props.bet?.betType, props.bet?.selection),
+);
+const editTitleSelection = computed(() => editTitleCondensed.value.display);
+const editTitleTooltip = computed(() =>
+  editTitleCondensed.value.isCondensed ? editTitleCondensed.value.full : undefined,
+);
 
 const show = ref(props.modelValue);
 const isSaving = ref(false);
@@ -367,6 +386,14 @@ const initialLegsForEditor = ref<
 const isMultiLegBetType = computed(
   () => betType.value === "Accumulator" || betType.value === "Bet Builder" || betType.value === "Cross Match Bet Builder",
 );
+// Of the three multi-leg bet types, only Accumulator and Cross Match Bet
+// Builder can have legs spread across several different days (e.g. a
+// Saturday + Sunday fixture in the same bet), so only those two need the
+// wider multi-day fixture window below. Bet Builder is always a single
+// fixture, so it only ever needs fixtures from the bet's own Date field.
+const isMultiDateBetType = computed(
+  () => betType.value === "Accumulator" || betType.value === "Cross Match Bet Builder",
+);
 const isHydrating = ref(false);
 
 
@@ -379,10 +406,9 @@ const fetchMarkets = async () => {
   }
 };
 
-// Fixture dropdown for legs spans a wide date window (not just "today")
-// since an Accumulator/Bet Builder/Cross Match Bet Builder being edited may
-// reference fixtures from any recently-placed date.
-const fetchFixturesAroundDate = async (dateValue: string) => {
+// Bet Builder is always a single fixture, so its legs only ever need
+// fixtures from the bet's own Date field — no multi-day window.
+const fetchFixturesForDate = async (dateValue: string) => {
   if (!dateValue) {
     fixtures.value = [];
     return;
@@ -398,6 +424,57 @@ const fetchFixturesAroundDate = async (dateValue: string) => {
     fixturesLoading.value = false;
   }
 };
+
+// Fixture dropdown for legs spans a wide date window (not just "today")
+// since an Accumulator/Cross Match Bet Builder being edited may reference
+// fixtures from any recently-placed date. Uses the from/to range form of
+// GET /api/fixtures, centered on the bet's own Date field so that legs
+// originally spread across a weekend (e.g. Sat + Sun kickoffs) remain
+// selectable when re-editing. Bet Builder never uses this — see
+// fetchFixturesForDate above.
+const FIXTURE_RANGE_LOOKBACK_DAYS = 7;
+const FIXTURE_RANGE_LOOKAHEAD_DAYS = 7;
+const fetchFixturesAroundDate = async (dateValue: string) => {
+  if (!dateValue) {
+    fixtures.value = [];
+    return;
+  }
+  const center = new Date(`${dateValue}T00:00:00Z`);
+  if (!Number.isFinite(center.getTime())) {
+    fixtures.value = [];
+    return;
+  }
+  const from = new Date(center);
+  from.setUTCDate(from.getUTCDate() - FIXTURE_RANGE_LOOKBACK_DAYS);
+  const to = new Date(center);
+  to.setUTCDate(to.getUTCDate() + FIXTURE_RANGE_LOOKAHEAD_DAYS);
+  // Cap the future edge to the same 7-day-ahead limit GET /api/fixtures
+  // enforces server-side (Add Bet never allows logging further ahead than
+  // that, so a bet being edited can never legitimately need fixtures beyond
+  // it either).
+  const maxFuture = new Date();
+  maxFuture.setUTCHours(0, 0, 0, 0);
+  maxFuture.setUTCDate(maxFuture.getUTCDate() + 7);
+  const cappedTo = to.getTime() > maxFuture.getTime() ? maxFuture : to;
+
+  fixturesLoading.value = true;
+  try {
+    const res = await api.get("/api/fixtures", {
+      params: { from: from.toISOString().slice(0, 10), to: cappedTo.toISOString().slice(0, 10) },
+    });
+    fixtures.value = Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error("Failed to fetch fixtures:", error);
+    fixtures.value = [];
+  } finally {
+    fixturesLoading.value = false;
+  }
+};
+
+const fetchFixturesForLegs = async (dateValue: string) =>
+  isMultiDateBetType.value ? fetchFixturesAroundDate(dateValue) : fetchFixturesForDate(dateValue);
+
+
 
 const fallbackBetTypes = [
   "Accumulator",
@@ -683,7 +760,7 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
       playerId: leg.playerId || null,
     }));
     void fetchMarkets();
-    void fetchFixturesAroundDate(date.value);
+    void fetchFixturesForLegs(date.value);
     legs.value = [];
     legsValid.value = false;
     // Remount BetLegsEditor so it re-reads the freshly-hydrated initialLegs.
@@ -864,7 +941,12 @@ watch(betType, (value) => {
     legsValid.value = false;
     legsEditorKey.value += 1;
     if (!markets.value.length) void fetchMarkets();
-    if (!fixtures.value.length) void fetchFixturesAroundDate(date.value);
+    // Always refetch (not just when `fixtures` is empty) since Bet Builder
+    // needs only the single Date-field day while Accumulator/Cross Match Bet
+    // Builder need the wider multi-day window — a bet-type change between
+    // them means whatever's already cached in `fixtures` may be the wrong
+    // shape for the newly-selected type.
+    void fetchFixturesForLegs(date.value);
   }
   if (value !== "Other") {
     otherBetType.value = "";

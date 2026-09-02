@@ -1486,83 +1486,150 @@ app.get('/api/fixtures/today', asyncHandler(async (req, res) => {
   res.json(fixtures);
 }));
 
-// Returns cached fixtures for a single given date, used to populate the Add
-// Bet fixture dropdown. `date` must not be more than 7 days in the future —
-// Add Bet never allows logging that far ahead. Past dates that have never
-// been cached are fetched on-demand from TheSportsDB (one call per tracked
-// competition) and cached permanently, enabling retrospective logging for
-// any past date without waiting on the daily refresh job.
+// Widest span (inclusive, in days) allowed between `from` and `to` when using
+// the range form of GET /api/fixtures below — bounds how many on-demand
+// TheSportsDB cache-fill calls a single request can trigger for past dates.
+const MAX_FIXTURE_RANGE_DAYS = 14;
+
+// On-demand cache fill for a single past date we've never seen before —
+// future dates are always covered by the daily refresh job, so this is the
+// only path that ever hits TheSportsDB live from a request handler, and only
+// for genuinely new historical lookups. Shared by both the single-`date` and
+// `from`/`to` range forms of GET /api/fixtures below.
+const ensurePastDateCached = async (requestedDate: Date): Promise<void> => {
+  const dateString = toDateOnly(requestedDate);
+  const fetched = await fetchFixturesForDate(dateString);
+  if (fetched.length === 0) return;
+
+  await prisma.$transaction(
+    fetched.map((fixture) =>
+      prisma.fixture.upsert({
+        where: { sportsDbEventId: fixture.sportsDbEventId },
+        create: {
+          sportsDbEventId: fixture.sportsDbEventId,
+          league: fixture.league,
+          homeTeam: fixture.homeTeam,
+          awayTeam: fixture.awayTeam,
+          homeTeamSportsDbId: fixture.homeTeamSportsDbId,
+          awayTeamSportsDbId: fixture.awayTeamSportsDbId,
+          kickoffAt: fixture.kickoffAt,
+          venue: fixture.venue,
+          isHistorical: true,
+        },
+        update: {
+          homeTeam: fixture.homeTeam,
+          awayTeam: fixture.awayTeam,
+          homeTeamSportsDbId: fixture.homeTeamSportsDbId,
+          awayTeamSportsDbId: fixture.awayTeamSportsDbId,
+          kickoffAt: fixture.kickoffAt,
+          venue: fixture.venue,
+          isHistorical: true,
+          fetchedAt: new Date(),
+        },
+      }),
+    ),
+  );
+};
+
+// Returns cached fixtures for either a single given date (`date`) or an
+// inclusive date range (`from`/`to`), used to populate the Add/Edit Bet
+// fixture dropdown(s). The range form exists because Accumulator and Cross
+// Match Bet Builder legs can be drawn from fixtures spanning several days
+// (e.g. a Saturday + Sunday fixture in the same bet) — the single-`date`
+// form remains for Match/Player Prop/Bet Builder, which only ever need one
+// day. Neither form allows requesting more than `MAX_FIXTURE_LOOKAHEAD_DAYS`
+// days into the future — Add Bet never allows logging that far ahead. Past
+// dates that have never been cached are fetched on-demand from TheSportsDB
+// (one call per tracked competition, per missing date) and cached
+// permanently, enabling retrospective logging for any past date without
+// waiting on the daily refresh job.
 app.get('/api/fixtures', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const dateParam = String(req.query.date || '');
-  const requestedDate = parseDateOnly(dateParam);
-  if (!requestedDate) {
-    return res.status(400).json({ error: 'A valid date query parameter (YYYY-MM-DD) is required.' });
-  }
+  const fromParam = String(req.query.from || '');
+  const toParam = String(req.query.to || '');
+  const isRangeRequest = Boolean(fromParam || toParam);
 
   const startOfToday = new Date();
   startOfToday.setUTCHours(0, 0, 0, 0);
   const maxFutureDate = new Date(startOfToday);
   maxFutureDate.setUTCDate(maxFutureDate.getUTCDate() + MAX_FIXTURE_LOOKAHEAD_DAYS);
 
-  if (requestedDate.getTime() > maxFutureDate.getTime()) {
-    return res.status(400).json({
-      error: `Bets can only be logged up to ${MAX_FIXTURE_LOOKAHEAD_DAYS} days in advance.`,
-    });
-  }
+  let startOfRange: Date;
+  let endOfRangeExclusive: Date;
 
-  const isPastDate = requestedDate.getTime() < startOfToday.getTime();
-  const startOfRequestedDay = requestedDate;
-  const endOfRequestedDay = new Date(requestedDate);
-  endOfRequestedDay.setUTCDate(endOfRequestedDay.getUTCDate() + 1);
-
-  let fixtures = await prisma.fixture.findMany({
-    where: { kickoffAt: { gte: startOfRequestedDay, lt: endOfRequestedDay } },
-    orderBy: { kickoffAt: 'asc' },
-  });
-
-  // On-demand cache fill for a past date we've never seen before — future
-  // dates are always covered by the daily refresh job, so this is the only
-  // path that ever hits TheSportsDB live from a request handler, and only
-  // for genuinely new historical lookups.
-  if (isPastDate && fixtures.length === 0) {
-    const dateString = toDateOnly(requestedDate);
-    const fetched = await fetchFixturesForDate(dateString);
-
-    if (fetched.length > 0) {
-      await prisma.$transaction(
-        fetched.map((fixture) =>
-          prisma.fixture.upsert({
-            where: { sportsDbEventId: fixture.sportsDbEventId },
-            create: {
-              sportsDbEventId: fixture.sportsDbEventId,
-              league: fixture.league,
-              homeTeam: fixture.homeTeam,
-              awayTeam: fixture.awayTeam,
-              homeTeamSportsDbId: fixture.homeTeamSportsDbId,
-              awayTeamSportsDbId: fixture.awayTeamSportsDbId,
-              kickoffAt: fixture.kickoffAt,
-              venue: fixture.venue,
-              isHistorical: true,
-            },
-            update: {
-              homeTeam: fixture.homeTeam,
-              awayTeam: fixture.awayTeam,
-              homeTeamSportsDbId: fixture.homeTeamSportsDbId,
-              awayTeamSportsDbId: fixture.awayTeamSportsDbId,
-              kickoffAt: fixture.kickoffAt,
-              venue: fixture.venue,
-              isHistorical: true,
-              fetchedAt: new Date(),
-            },
-          }),
-        ),
-      );
-
-      fixtures = await prisma.fixture.findMany({
-        where: { kickoffAt: { gte: startOfRequestedDay, lt: endOfRequestedDay } },
-        orderBy: { kickoffAt: 'asc' },
+  if (isRangeRequest) {
+    const fromDate = parseDateOnly(fromParam);
+    const toDate = parseDateOnly(toParam);
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ error: 'Valid from and to query parameters (YYYY-MM-DD) are required.' });
+    }
+    if (toDate.getTime() < fromDate.getTime()) {
+      return res.status(400).json({ error: 'to must not be before from.' });
+    }
+    const spanDays = Math.round((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000));
+    if (spanDays > MAX_FIXTURE_RANGE_DAYS) {
+      return res.status(400).json({
+        error: `The from/to range cannot span more than ${MAX_FIXTURE_RANGE_DAYS} days.`,
       });
     }
+    if (toDate.getTime() > maxFutureDate.getTime()) {
+      return res.status(400).json({
+        error: `Bets can only be logged up to ${MAX_FIXTURE_LOOKAHEAD_DAYS} days in advance.`,
+      });
+    }
+    startOfRange = fromDate;
+    endOfRangeExclusive = new Date(toDate);
+    endOfRangeExclusive.setUTCDate(endOfRangeExclusive.getUTCDate() + 1);
+  } else {
+    const requestedDate = parseDateOnly(dateParam);
+    if (!requestedDate) {
+      return res.status(400).json({ error: 'A valid date query parameter (YYYY-MM-DD) is required.' });
+    }
+    if (requestedDate.getTime() > maxFutureDate.getTime()) {
+      return res.status(400).json({
+        error: `Bets can only be logged up to ${MAX_FIXTURE_LOOKAHEAD_DAYS} days in advance.`,
+      });
+    }
+    startOfRange = requestedDate;
+    endOfRangeExclusive = new Date(requestedDate);
+    endOfRangeExclusive.setUTCDate(endOfRangeExclusive.getUTCDate() + 1);
+  }
+
+  const fixturesQuery = () =>
+    prisma.fixture.findMany({
+      where: { kickoffAt: { gte: startOfRange, lt: endOfRangeExclusive } },
+      orderBy: { kickoffAt: 'asc' },
+    });
+
+  let fixtures = await fixturesQuery();
+
+  // On-demand cache fill for every past date within the requested span that
+  // we've never seen before — future dates are always covered by the daily
+  // refresh job. We only need to fill dates that came back with zero cached
+  // fixtures; a date with at least one cached fixture is assumed already
+  // populated (mirrors the pre-existing single-date behavior).
+  const cachedDates = new Set(fixtures.map((f) => toDateOnly(f.kickoffAt)));
+  const datesNeedingFill: Date[] = [];
+  for (
+    let cursor = new Date(startOfRange);
+    cursor.getTime() < endOfRangeExclusive.getTime();
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  ) {
+    const cursorDate = new Date(cursor);
+    if (cursorDate.getTime() >= startOfToday.getTime()) continue; // future/today handled by the daily refresh job
+    if (cachedDates.has(toDateOnly(cursorDate))) continue;
+    datesNeedingFill.push(cursorDate);
+  }
+
+  if (datesNeedingFill.length > 0) {
+    // Sequential, not Promise.all — every call goes through thesportsdb.ts's
+    // shared rate limiter (see the same note elsewhere in this file), so
+    // there's no throughput benefit to parallelizing and doing so would only
+    // risk bursting past the limiter's pacing.
+    for (const missingDate of datesNeedingFill) {
+      await ensurePastDateCached(missingDate);
+    }
+    fixtures = await fixturesQuery();
   }
 
   res.json(fixtures);

@@ -5,6 +5,8 @@ import EditBetModal from "@/components/EditBetModal.vue";
 import BetsTableControls from "@/components/BetsTableControls.vue";
 import { formatOddsForDisplay, type OddsFormat } from "@/utils/odds";
 import { formatBookmakerLabel } from "@/utils/bookmaker";
+import { getCondensedSelection } from "@/utils/betSelection";
+
 import {
   SELECTED_SEASON_STORAGE_KEY,
   getCurrentSeasonKey,
@@ -370,6 +372,22 @@ const getDisplaySelection = (bet: Record<string, any>) => {
 
   return rawSelection;
 };
+
+// Condenses Accumulator/Bet Builder/Cross Match Bet Builder descriptions
+// (which can list many legs) down to the first 2 legs + "+N more" for the
+// dense table/mobile-card views, while keeping the full text available via
+// a tooltip -- see getSelectionTooltip() below.
+const getCondensedDisplaySelection = (bet: Record<string, any>) =>
+  getCondensedSelection(bet.betType, getDisplaySelection(bet)).display;
+
+// Only returns a tooltip string when the description was actually
+// shortened, so hovering a normal (non-multi-leg or short) bet doesn't show
+// a redundant native tooltip duplicating the visible text.
+const getSelectionTooltip = (bet: Record<string, any>) => {
+  const condensed = getCondensedSelection(bet.betType, getDisplaySelection(bet));
+  return condensed.isCondensed ? condensed.full : undefined;
+};
+
 
 const getProfitClass = (profit: unknown) => {
   const value = Number(profit);
@@ -929,8 +947,8 @@ const columnOptions: Array<{
           />
         </div>
 
-        <p class="mb-2 text-sm text-gray-800 dark:text-gray-200">
-          {{ getDisplaySelection(bet) }}
+        <p class="mb-2 text-sm text-gray-800 dark:text-gray-200" :title="getSelectionTooltip(bet)">
+          {{ getCondensedDisplaySelection(bet) }}
         </p>
 
         <div class="mb-2 flex flex-wrap items-center gap-2">
@@ -1117,8 +1135,8 @@ const columnOptions: Array<{
                 {{ getBookmakerLabel(String(bet.bookmaker || "")) }}
               </span>
             </td>
-            <td v-if="visibleColumns.description" class="px-6 py-4">
-              {{ getDisplaySelection(bet) }}
+            <td v-if="visibleColumns.description" class="px-6 py-4" :title="getSelectionTooltip(bet)">
+              {{ getCondensedDisplaySelection(bet) }}
             </td>
             <td v-if="visibleColumns.stakeType" class="px-6 py-4">
               <span

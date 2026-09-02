@@ -74,28 +74,58 @@ paths:
   /api/fixtures:
     get:
       tags: [Fixtures]
-      summary: List cached fixtures for a single given date (Add Bet fixture dropdown)
+      summary: >
+        List cached fixtures for a single given date, or an inclusive
+        from/to date range (Add/Edit Bet fixture dropdown(s))
       description: >
-        Returns cached fixtures for the given `date`, used to populate the
-        Add Bet fixture dropdown. Requires authentication. `date` must not be
-        more than 7 days in the future (Add Bet never allows logging that far
-        ahead). Past dates that have never been cached are fetched on-demand
-        from TheSportsDB (one call per tracked competition) and cached
-        permanently, so retrospective logging works for any past date
+        Returns cached fixtures either for the given `date`, or for the
+        inclusive range `from`..`to`, used to populate the Add/Edit Bet
+        fixture dropdown(s). Requires authentication. The range form
+        (`from`/`to`) exists so that multi-leg bet types whose legs can span
+        several days — Accumulator and Cross Match Bet Builder — can offer
+        fixtures from every day in the window rather than a single date; it
+        cannot span more than 14 days. Neither form allows a date more than 7
+        days in the future (Add Bet never allows logging that far ahead).
+        Past dates that have never been cached are fetched on-demand from
+        TheSportsDB (one call per tracked competition, per missing date) and
+        cached permanently, so retrospective logging works for any past date
         without waiting on the daily refresh job. Future dates (today..+7
         days) are always served from the cache refreshed by the daily job.
+        If any of `from`/`to` is supplied, the range form is used and `date`
+        is ignored.
       operationId: getFixturesForDate
       parameters:
         - name: date
           in: query
-          required: true
+          required: false
           schema:
             type: string
             format: date
+          description: >
+            Single date to fetch fixtures for. Required unless `from`/`to`
+            are supplied.
           example: '2026-09-05'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Start (inclusive) of the date range. Required together with `to`.
+          example: '2026-09-05'
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: >
+            End (inclusive) of the date range. Required together with
+            `from`; must not be more than 14 days after `from`.
+          example: '2026-09-08'
       responses:
         '200':
-          description: Cached fixtures for the given date (may be empty).
+          description: Cached fixtures for the given date/range (may be empty).
           content:
             application/json:
               schema:
@@ -103,7 +133,9 @@ paths:
                 items:
                   $ref: '#/components/schemas/Fixture'
         '400':
-          description: Missing/invalid date, or a future date beyond the 7-day cap.
+          description: >
+            Missing/invalid date(s), a future date beyond the 7-day cap, a
+            `to` before `from`, or a range spanning more than 14 days.
           content:
             application/json:
               schema:
