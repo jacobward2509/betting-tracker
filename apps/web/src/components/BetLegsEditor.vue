@@ -25,10 +25,13 @@
         <option disabled value="">
           {{ fixturesLoading ? "Loading fixtures..." : "Select fixture" }}
         </option>
-        <option v-for="f in fixtures" :key="f.id" :value="f.id">
-          {{ fixtureOptionLabel(f) }}
-        </option>
+        <optgroup v-for="group in fixturesByLeague" :key="group.league" :label="group.label">
+          <option v-for="f in group.fixtures" :key="f.id" :value="f.id">
+            {{ fixtureOptionLabel(f) }}
+          </option>
+        </optgroup>
       </select>
+
     </div>
 
 
@@ -63,15 +66,18 @@
           <option disabled value="">
             {{ fixturesLoading ? "Loading fixtures..." : "Select fixture" }}
           </option>
-          <option
-            v-for="f in availableFixturesForLeg(index)"
-            :key="f.id"
-            :value="f.id"
+          <optgroup
+            v-for="group in availableFixtureGroupsForLeg(index)"
+            :key="group.league"
+            :label="group.label"
           >
-            {{ fixtureOptionLabel(f) }}
-          </option>
+            <option v-for="f in group.fixtures" :key="f.id" :value="f.id">
+              {{ fixtureOptionLabel(f) }}
+            </option>
+          </optgroup>
 
         </select>
+
         <p v-if="fixtureConflictMessage(index)" class="mt-1 text-xs text-red-600 dark:text-red-400">
           {{ fixtureConflictMessage(index) }}
         </p>
@@ -89,8 +95,11 @@
           @change="onMarketChange(index)"
         >
           <option disabled value="">Select market</option>
-          <option v-for="m in markets" :key="m.id" :value="m.id">{{ m.name }}</option>
+          <optgroup v-for="group in marketGroups" :key="group.category" :label="group.label">
+            <option v-for="m in group.markets" :key="m.id" :value="m.id">{{ m.name }}</option>
+          </optgroup>
         </select>
+
       </div>
 
       <div v-if="marketFor(leg)?.requiresPlayer" class="mt-2">
@@ -106,7 +115,10 @@
           </option>
           <optgroup v-if="leg.players.homeTeam" :label="leg.players.homeTeam">
             <option
-              v-for="p in leg.players.players.filter((pl: any) => pl.teamName === leg.players.homeTeam)"
+              v-for="p in filterPlayersForMarket(
+                leg.players.players.filter((pl: any) => pl.teamName === leg.players.homeTeam),
+                marketFor(leg),
+              )"
               :key="p.id"
               :value="p.id"
             >
@@ -115,13 +127,17 @@
           </optgroup>
           <optgroup v-if="leg.players.awayTeam" :label="leg.players.awayTeam">
             <option
-              v-for="p in leg.players.players.filter((pl: any) => pl.teamName === leg.players.awayTeam)"
+              v-for="p in filterPlayersForMarket(
+                leg.players.players.filter((pl: any) => pl.teamName === leg.players.awayTeam),
+                marketFor(leg),
+              )"
               :key="p.id"
               :value="p.id"
             >
               {{ p.name }}
             </option>
           </optgroup>
+
         </select>
       </div>
 
@@ -172,9 +188,12 @@ import api from "@/lib/api";
 import {
   buildCombinedMarketOptions,
   encodeCombinedMarketOption,
+  filterPlayersForMarket,
+  groupMarketsByCategory,
   parseCombinedMarketOption,
   shouldCombineSelectionAndLine,
 } from "@/utils/marketOptions";
+import { groupFixturesByLeague } from "@/utils/fixtureGrouping";
 
 
 type MarketSelectionOption = { id: number; label: string; sortOrder: number };
@@ -188,7 +207,8 @@ type MarketOption = {
   lines: MarketLineOption[];
 };
 type FixtureOption = { id: string; homeTeam: string; awayTeam: string; kickoffAt: string; league: string };
-type PlayerOption = { id: string; name: string; teamName: string };
+type PlayerOption = { id: string; name: string; teamName: string; position?: string | null };
+
 
 type LegState = {
   key: number;
@@ -274,10 +294,22 @@ watch(sharedFixtureId, (fixtureId) => {
 const marketFor = (leg: LegState): MarketOption | null =>
   props.markets.find((m) => m.id === leg.marketId) || null;
 
+// Markets grouped into <optgroup> sections by category (Match Markets /
+// Player Markets) — every leg across all three multi-leg bet types can
+// legitimately be either category, so (unlike AddBetModal/EditBetModal,
+// which scope their Market dropdown to one category up front) this needs
+// both groups shown together.
+const marketGroups = computed(() => groupMarketsByCategory(props.markets));
+
+// Fixtures grouped into <optgroup> sections by league priority, used by the
+// shared Bet Builder fixture select above.
+const fixturesByLeague = computed(() => groupFixturesByLeague(props.fixtures));
+
 const isYesOnlyMarket = (leg: LegState): boolean => {
   const market = marketFor(leg);
   return Boolean(market && market.selections.length === 1 && market.selections[0]?.label === "Yes");
 };
+
 
 // UX-only combined "Selection + Line" dropdown (e.g. "Over 0.5") for a leg
 // whose market has both — leg.selectionId/leg.lineValue remain the actual
@@ -311,6 +343,10 @@ const availableFixturesForLeg = (index: number): FixtureOption[] => {
   }
   return props.fixtures;
 };
+
+// Same fixture list as availableFixturesForLeg above, grouped into
+// <optgroup> sections by league for the per-leg fixture select.
+const availableFixtureGroupsForLeg = (index: number) => groupFixturesByLeague(availableFixturesForLeg(index));
 
 // Fixture options can now span multiple days (Accumulator / Cross Match Bet
 // Builder legs are no longer confined to a single day's fixtures — see

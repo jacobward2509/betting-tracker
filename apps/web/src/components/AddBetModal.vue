@@ -143,7 +143,10 @@
               </option>
               <optgroup v-if="fixturePlayers.homeTeam" :label="fixturePlayers.homeTeam">
                 <option
-                  v-for="p in fixturePlayers.players.filter((pl) => pl.teamName === fixturePlayers.homeTeam)"
+                  v-for="p in filterPlayersForMarket(
+                    fixturePlayers.players.filter((pl) => pl.teamName === fixturePlayers.homeTeam),
+                    selectedMarket,
+                  )"
                   :key="p.id"
                   :value="p.id"
                 >
@@ -152,14 +155,19 @@
               </optgroup>
               <optgroup v-if="fixturePlayers.awayTeam" :label="fixturePlayers.awayTeam">
                 <option
-                  v-for="p in fixturePlayers.players.filter((pl) => pl.teamName === fixturePlayers.awayTeam)"
+                  v-for="p in filterPlayersForMarket(
+                    fixturePlayers.players.filter((pl) => pl.teamName === fixturePlayers.awayTeam),
+                    selectedMarket,
+                  )"
                   :key="p.id"
                   :value="p.id"
                 >
                   {{ p.name }}
                 </option>
               </optgroup>
+
               <option value="__manual__">Other / not listed</option>
+
             </select>
 
             <input
@@ -402,9 +410,11 @@ import api from "@/lib/api";
 import BetLegsEditor from "@/components/BetLegsEditor.vue";
 import {
   buildCombinedMarketOptions,
+  filterPlayersForMarket,
   parseCombinedMarketOption,
   shouldCombineSelectionAndLine,
 } from "@/utils/marketOptions";
+import { groupFixturesByLeague } from "@/utils/fixtureGrouping";
 
 
 import {
@@ -465,7 +475,8 @@ type FixtureOption = {
   kickoffAt: string;
   league: string;
 };
-type PlayerOption = { id: string; name: string; teamName: string };
+type PlayerOption = { id: string; name: string; teamName: string; position?: string | null };
+
 
 const markets = ref<MarketOption[]>([]);
 const playerMarkets = computed(() => markets.value.filter((m) => m.category === "PLAYER"));
@@ -531,69 +542,9 @@ const fixtures = ref<FixtureOption[]>([]);
 const fixturesLoading = ref(false);
 const selectedFixtureId = ref<string>("");
 
-// Priority order for grouping the Fixture dropdown by league — matches the
-// `League` enum in apps/api/prisma/schema.prisma. Any league not explicitly
-// listed here (EFL_CUP, FA_CUP, EUROPA_LEAGUE, CONFERENCE_LEAGUE) falls back
-// to this same enum order, appended after the explicitly-prioritized leagues
-// rather than being dropped from the dropdown.
-const LEAGUE_SORT_ORDER = [
-  "PREMIER_LEAGUE",
-  "CHAMPIONSHIP",
-  "LA_LIGA",
-  "BUNDESLIGA",
-  "LIGUE_1",
-  "SERIE_A",
-  "CHAMPIONS_LEAGUE",
-  "EFL_CUP",
-  "FA_CUP",
-  "EUROPA_LEAGUE",
-  "CONFERENCE_LEAGUE",
-];
-
-const LEAGUE_LABELS: Record<string, string> = {
-  PREMIER_LEAGUE: "Premier League",
-  CHAMPIONSHIP: "Championship",
-  LA_LIGA: "La Liga",
-  BUNDESLIGA: "Bundesliga",
-  LIGUE_1: "Ligue 1",
-  SERIE_A: "Serie A",
-  CHAMPIONS_LEAGUE: "Champions League",
-  EFL_CUP: "EFL Cup",
-  FA_CUP: "FA Cup",
-  EUROPA_LEAGUE: "Europa League",
-  CONFERENCE_LEAGUE: "Conference League",
-};
-
-const formatLeagueLabel = (league: string) => LEAGUE_LABELS[league] || league;
-
-const leagueSortIndex = (league: string) => {
-  const index = LEAGUE_SORT_ORDER.indexOf(league);
-  return index === -1 ? LEAGUE_SORT_ORDER.length : index;
-};
-
-// Groups fixtures into <optgroup> sections for the Fixture select, ordered
-// by league priority (Premier League first, then Championship, La Liga,
-// Bundesliga, Ligue 1, Serie A, Champions League, then any remaining
-// tracked competitions), with fixtures within each league kept in their
-// existing kickoff-time-ascending order from the API response.
-const fixturesByLeague = computed(() => {
-  const groups = new Map<string, FixtureOption[]>();
-  for (const fixture of fixtures.value) {
-    const existing = groups.get(fixture.league);
-    if (existing) {
-      existing.push(fixture);
-    } else {
-      groups.set(fixture.league, [fixture]);
-    }
-  }
-  return Array.from(groups.entries())
-    .sort(([a], [b]) => leagueSortIndex(a) - leagueSortIndex(b))
-    .map(([league, leagueFixtures]) => ({
-      league,
-      label: formatLeagueLabel(league),
-      fixtures: leagueFixtures,
-    }));
-});
+// Fixtures grouped into <optgroup> sections by league priority — see
+// groupFixturesByLeague in @/utils/fixtureGrouping for ordering details.
+const fixturesByLeague = computed(() => groupFixturesByLeague(fixtures.value));
 
 // True once a fixture has actually been chosen — either a listed fixture or
 // the manual "Other / not listed" entry with both team names filled in.

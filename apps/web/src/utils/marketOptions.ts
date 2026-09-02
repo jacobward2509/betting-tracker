@@ -54,3 +54,60 @@ export const parseCombinedMarketOption = (
   if (!Number.isFinite(selectionId) || !lineValue) return null;
   return { selectionId, lineValue };
 };
+
+// Shared logic for grouping a Market list into <optgroup> sections by
+// category (Match Markets / Player Markets), used anywhere a single Market
+// <select> needs to offer both categories at once (currently only
+// BetLegsEditor — AddBetModal/EditBetModal already scope their Market
+// dropdown to one category up front based on the selected bet type).
+export type MarketCategoryLike = { category: "MATCH" | "PLAYER" };
+
+export type MarketCategoryGroup<T extends MarketCategoryLike> = {
+  category: "MATCH" | "PLAYER";
+  label: string;
+  markets: T[];
+};
+
+const MARKET_CATEGORY_LABELS: Record<"MATCH" | "PLAYER", string> = {
+  MATCH: "Match Markets",
+  PLAYER: "Player Markets",
+};
+
+// Groups markets into <optgroup> sections, Match Markets first then Player
+// Markets, omitting either group entirely if it has no markets to show.
+export const groupMarketsByCategory = <T extends MarketCategoryLike>(
+  markets: T[],
+): MarketCategoryGroup<T>[] =>
+  (["MATCH", "PLAYER"] as const)
+    .map((category) => ({
+      category,
+      label: MARKET_CATEGORY_LABELS[category],
+      markets: markets.filter((m) => m.category === category),
+    }))
+    .filter((group) => group.markets.length > 0);
+
+// Player markets that should only ever offer players in a specific position
+// — currently just Goalkeeper Saves, keyed by market name rather than a new
+// schema field since it's a single market today. Extend this map if more
+// position-scoped player markets are added later.
+const POSITION_SCOPED_MARKETS: Record<string, string> = {
+  "Goalkeeper Saves": "Goalkeeper",
+};
+
+export type PlayerPositionLike = { position?: string | null };
+export type MarketNameLike = { name: string };
+
+// Filters a fixture's player list down to the position required by the
+// given market (e.g. only goalkeepers for "Goalkeeper Saves"). Markets with
+// no position restriction — the vast majority — return the players list
+// unchanged. Players with a missing/unset position are excluded once a
+// restriction applies, since we can't confirm they're eligible.
+export const filterPlayersForMarket = <T extends PlayerPositionLike>(
+  players: T[],
+  market: MarketNameLike | null | undefined,
+): T[] => {
+  const requiredPosition = market ? POSITION_SCOPED_MARKETS[market.name] : undefined;
+  if (!requiredPosition) return players;
+  return players.filter((player) => player.position === requiredPosition);
+};
+
