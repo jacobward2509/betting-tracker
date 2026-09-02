@@ -321,7 +321,7 @@ const isSaving = ref(false);
 const bookmakers = ref<{ id: string; bookmakers: string }[]>([]);
 const betTypes = ref<{ id: number | string; betTypes: string }[]>([]);
 const playerPropMarkets = ref<{ id: number; markets: string }[]>([]);
-const fallbackBetTypes = ["Accumulator", "Bet Builder", "Player Prop", "Superboost", "FT Result", "Other"];
+const fallbackBetTypes = ["Accumulator", "Bet Builder", "Match", "Player Prop", "Superboost", "Other"];
 const authStore = useAuthStore();
 const suggestionsStore = useSuggestionsStore();
 

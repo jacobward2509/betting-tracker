@@ -25,6 +25,52 @@
             />
           </div>
 
+          <div v-if="betType !== 'Accumulator'">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
+            <select
+              v-model="selectedFixtureId"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-fixture"
+            >
+              <option value="">
+                {{ fixturesLoading ? "Loading fixtures..." : "Select fixture" }}
+              </option>
+              <option v-for="f in fixtures" :key="f.id" :value="f.id">
+                {{ f.homeTeam }} vs {{ f.awayTeam }}
+              </option>
+              <option value="__manual__">Other / not listed</option>
+            </select>
+
+            <div v-if="selectedFixtureId === '__manual__'" class="mt-2 flex items-center gap-2">
+              <input
+                v-model="homeTeam"
+                type="text"
+                placeholder="Home Team"
+                list="add-home-team-suggestions"
+                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+                data-test-id="input-home-team"
+              />
+              <span class="text-sm font-semibold text-gray-600 dark:text-gray-300">vs</span>
+              <input
+                v-model="awayTeam"
+                type="text"
+                placeholder="Away Team"
+                list="add-away-team-suggestions"
+                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+                data-test-id="input-away-team"
+              />
+            </div>
+            <datalist id="add-home-team-suggestions">
+              <option v-for="team in filteredHomeTeamSuggestions" :key="`add-home-team-${team}`" :value="team" />
+            </datalist>
+            <datalist id="add-away-team-suggestions">
+              <option v-for="team in filteredAwayTeamSuggestions" :key="`add-away-team-${team}`" :value="team" />
+            </datalist>
+          </div>
+
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
             <select
@@ -40,20 +86,6 @@
             </select>
           </div>
 
-          <div v-if="betType === 'FT Result'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">FT Result</label>
-            <select
-              v-model="ftResultOutcome"
-              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              required
-              data-test-id="input-ft-result-outcome"
-            >
-              <option>Home Win</option>
-              <option>Draw</option>
-              <option>Away Win</option>
-            </select>
-          </div>
-
           <div v-if="betType === 'Other'">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
             <input
@@ -65,7 +97,7 @@
             />
           </div>
 
-          <div v-if="betType === 'Player Prop'">
+          <div v-if="isMarketBetType">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Market</label>
             <select
               v-model="selectedMarketId"
@@ -74,13 +106,13 @@
               data-test-id="input-player-prop-market"
             >
               <option disabled value="">Select market</option>
-              <option v-for="market in playerMarkets" :key="market.id" :value="market.id">
+              <option v-for="market in currentMarketOptions" :key="market.id" :value="market.id">
                 {{ market.name }}
               </option>
             </select>
           </div>
 
-          <div v-if="betType === 'Player Prop' && selectedMarket && selectedMarket.requiresPlayer">
+          <div v-if="isMarketBetType && selectedMarket && selectedMarket.requiresPlayer">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Player</label>
             <select
               v-model="selectedPlayerId"
@@ -127,7 +159,7 @@
             </datalist>
           </div>
 
-          <div v-if="betType === 'Player Prop' && selectedMarket && selectedMarket.selections.length">
+          <div v-if="isMarketBetType && selectedMarket && selectedMarket.selections.length && !isYesOnlyMarket">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Selection</label>
             <div class="mt-1 grid gap-3" :class="selectedMarket.lines.length ? 'sm:grid-cols-2' : ''">
               <select
@@ -154,52 +186,6 @@
                 </option>
               </select>
             </div>
-          </div>
-
-          <div v-if="betType !== 'Accumulator'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
-            <select
-              v-model="selectedFixtureId"
-              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              required
-              data-test-id="input-fixture"
-            >
-              <option value="">
-                {{ fixturesLoading ? "Loading fixtures..." : "Select fixture" }}
-              </option>
-              <option v-for="f in fixtures" :key="f.id" :value="f.id">
-                {{ f.homeTeam }} vs {{ f.awayTeam }}
-              </option>
-              <option value="__manual__">Other / not listed</option>
-            </select>
-
-            <div v-if="selectedFixtureId === '__manual__'" class="mt-2 flex items-center gap-2">
-              <input
-                v-model="homeTeam"
-                type="text"
-                placeholder="Home Team"
-                list="add-home-team-suggestions"
-                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                required
-                data-test-id="input-home-team"
-              />
-              <span class="text-sm font-semibold text-gray-600 dark:text-gray-300">vs</span>
-              <input
-                v-model="awayTeam"
-                type="text"
-                placeholder="Away Team"
-                list="add-away-team-suggestions"
-                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                required
-                data-test-id="input-away-team"
-              />
-            </div>
-            <datalist id="add-home-team-suggestions">
-              <option v-for="team in filteredHomeTeamSuggestions" :key="`add-home-team-${team}`" :value="team" />
-            </datalist>
-            <datalist id="add-away-team-suggestions">
-              <option v-for="team in filteredAwayTeamSuggestions" :key="`add-away-team-${team}`" :value="team" />
-            </datalist>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
@@ -421,7 +407,7 @@ watch(
 const bookie = ref("");
 const bookmakers = ref<{ id: string; bookmakers: string }[]>([]);
 const betTypes = ref<{ id: number | string; betTypes: string }[]>([]);
-const fallbackBetTypes = ["Accumulator", "Bet Builder", "Player Prop", "Superboost", "FT Result", "Other"];
+const fallbackBetTypes = ["Accumulator", "Bet Builder", "Match", "Player Prop", "Superboost", "Other"];
 const userDefaultBookmaker = ref("");
 const userDefaultBetType = ref("Player Prop");
 const userDefaultStake = ref(5);
@@ -448,9 +434,27 @@ type PlayerOption = { id: string; name: string; teamName: string };
 
 const markets = ref<MarketOption[]>([]);
 const playerMarkets = computed(() => markets.value.filter((m) => m.category === "PLAYER"));
+const matchMarkets = computed(() => markets.value.filter((m) => m.category === "MATCH"));
+// Bet types that are backed by the structured Market catalog rather than
+// being their own standalone concept — "Player Prop" surfaces PLAYER
+// markets, "Match" surfaces MATCH markets, both sharing the same
+// Market/Selection/Line UI below.
+const isMarketBetType = computed(() => betType.value === "Player Prop" || betType.value === "Match");
+const currentMarketOptions = computed(() =>
+  betType.value === "Match" ? matchMarkets.value : playerMarkets.value,
+);
 const selectedMarketId = ref<number | "">("");
 const selectedMarket = computed(
   () => markets.value.find((m) => m.id === selectedMarketId.value) || null,
+);
+// Markets seeded with a single "Yes" selection (e.g. Anytime Goalscorer,
+// Player to be Carded) don't need the user to pick anything — Yes is the
+// only possible outcome, so the Selection field is hidden entirely and the
+// selection is auto-applied (see the selectedMarketId watcher below).
+const isYesOnlyMarket = computed(
+  () =>
+    selectedMarket.value?.selections.length === 1 &&
+    selectedMarket.value?.selections[0]?.label === "Yes",
 );
 const selectedSelectionId = ref<number | "">("");
 const selectedLineValue = ref<string>("");
@@ -640,7 +644,6 @@ const result = ref("Open");
 const fixture = ref("");
 const stakeType = ref("Normal");
 const betType = ref("Player Prop");
-const ftResultOutcome = ref<"Home Win" | "Draw" | "Away Win">("Home Win");
 const homeTeam = ref("");
 const awayTeam = ref("");
 const otherBetType = ref("");
@@ -679,7 +682,6 @@ const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) =
   bookie.value = userDefaultBookmaker.value || "";
   stakeType.value = "Normal";
   betType.value = keepBetType ? preservedBetType : userDefaultBetType.value || "Player Prop";
-  ftResultOutcome.value = "Home Win";
   const keepingFixture = keepFixture && betType.value !== "Accumulator";
   selectedFixtureId.value = keepingFixture ? preservedFixtureId : "";
   homeTeam.value = keepingFixture ? preservedHomeTeam : "";
@@ -766,15 +768,12 @@ const getGeneratedDescription = () => {
   if (betType.value === "Accumulator") return "Accumulator";
   if (betType.value === "Bet Builder") return "Bet Builder";
   if (betType.value === "Superboost") return "Superboost";
-  if (betType.value === "FT Result") {
-    if (ftResultOutcome.value === "Draw") return "Draw";
-    if (ftResultOutcome.value === "Home Win") return `${currentHomeTeam.value} FT Result`;
-    return `${currentAwayTeam.value} FT Result`;
-  }
   if (betType.value === "Other") return otherBetType.value.trim();
 
   const market = selectedMarket.value;
-  const selectionLabel = market?.selections.find((s) => s.id === selectedSelectionId.value)?.label || "";
+  const selectionLabel = isYesOnlyMarket.value
+    ? ""
+    : market?.selections.find((s) => s.id === selectedSelectionId.value)?.label || "";
   const line = selectedLineValue.value ? String(selectedLineValue.value) : "";
   const playerName = market?.requiresPlayer ? currentPlayerName.value : "";
   return [playerName, market?.name, selectionLabel, line].filter(Boolean).join(" ");
@@ -837,9 +836,9 @@ const submitBet = async () => {
       alert("A fixture (or Home/Away team) is required.");
       return;
     }
-    if (betType.value === "Player Prop") {
+    if (isMarketBetType.value) {
       if (!selectedMarketId.value) {
-        alert("A market is required for Player Prop.");
+        alert(`A market is required for ${betType.value}.`);
         return;
       }
       const market = selectedMarket.value;
@@ -847,7 +846,7 @@ const submitBet = async () => {
         alert("Player is required for this market.");
         return;
       }
-      if (market && market.selections.length && !selectedSelectionId.value) {
+      if (market && market.selections.length && !isYesOnlyMarket.value && !selectedSelectionId.value) {
         alert("A selection is required for this market.");
         return;
       }
@@ -872,7 +871,7 @@ const submitBet = async () => {
       stakeType: stakeTypeMapping[stakeType.value] || "NORMAL",
       normalStake: isNormalPlusFree ? Number(normalStake.value) : null,
       betType: betType.value,
-      playerPropMarket: betType.value === "Player Prop" ? selectedMarket.value?.name || null : null,
+      playerPropMarket: isMarketBetType.value ? selectedMarket.value?.name || null : null,
       stake: totalStake,
       odds: Number(odds.value),
       potentialReturn: totalStake * Number(odds.value),
@@ -880,12 +879,12 @@ const submitBet = async () => {
       cashOutValue: result.value === "Cashed Out" ? Number(cashOutValue.value) : null,
       placedAt: new Date(date.value).toISOString(),
       fixtureId: betType.value !== "Accumulator" && !isManualFixture ? selectedFixtureId.value : null,
-      marketId: betType.value === "Player Prop" ? selectedMarketId.value || null : null,
-      selectionId: betType.value === "Player Prop" ? selectedSelectionId.value || null : null,
+      marketId: isMarketBetType.value ? selectedMarketId.value || null : null,
+      selectionId: isMarketBetType.value ? selectedSelectionId.value || null : null,
       lineValue:
-        betType.value === "Player Prop" && selectedLineValue.value ? Number(selectedLineValue.value) : null,
+        isMarketBetType.value && selectedLineValue.value ? Number(selectedLineValue.value) : null,
       playerId:
-        betType.value === "Player Prop" && selectedPlayerId.value && selectedPlayerId.value !== "__manual__"
+        isMarketBetType.value && selectedPlayerId.value && selectedPlayerId.value !== "__manual__"
           ? selectedPlayerId.value
           : null,
     };
@@ -944,22 +943,25 @@ watch(selectedFixtureId, (value) => {
 });
 
 watch(selectedMarketId, () => {
-  selectedSelectionId.value = "";
   selectedLineValue.value = "";
   selectedPlayerId.value = "";
   manualPlayerName.value = "";
+  // "Yes"-only markets (e.g. Anytime Goalscorer) have exactly one possible
+  // selection, so it's auto-applied rather than asking the user to pick it.
+  if (isYesOnlyMarket.value && selectedMarket.value) {
+    selectedSelectionId.value = selectedMarket.value.selections[0].id;
+  } else {
+    selectedSelectionId.value = "";
+  }
 });
 
 watch(betType, (value) => {
-  if (value !== "Player Prop") {
+  if (value !== "Player Prop" && value !== "Match") {
     selectedMarketId.value = "";
     selectedSelectionId.value = "";
     selectedLineValue.value = "";
     selectedPlayerId.value = "";
     manualPlayerName.value = "";
-  }
-  if (value !== "FT Result") {
-    ftResultOutcome.value = "Home Win";
   }
   if (value === "Accumulator") {
     homeTeam.value = "";
