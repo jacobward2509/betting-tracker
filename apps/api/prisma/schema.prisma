@@ -43,9 +43,52 @@ model Bet {
   playerId        String?
   playerRef       Player?          @relation(fields: [playerId], references: [id], onDelete: SetNull)
 
+  // Per-leg detail for multi-leg bet types (Accumulator, Bet Builder, Cross
+  // Match Bet Builder). Purely additive — legs is empty for every other bet
+  // type and for any historical Accumulator/Bet Builder rows logged before
+  // this feature existed, so those keep displaying via the flat
+  // fixture/selection strings above exactly as they do today.
+  legs BetLeg[]
+
   @@index([userId])
   @@index([marketId])
   @@index([fixtureId])
+  @@index([playerId])
+}
+
+// One leg of a multi-leg bet (Accumulator / Bet Builder / Cross Match Bet
+// Builder). Always sourced from the same structured catalog used for
+// single-fixture bets (Fixture, Market, MarketSelection, MarketLine,
+// Player) — there is deliberately no manual/free-text fallback here, per
+// the plan to phase manual fixture/selection entry out entirely.
+model BetLeg {
+  id    String @id @default(uuid())
+  betId String
+  bet   Bet    @relation(fields: [betId], references: [id], onDelete: Cascade)
+  order Int    @default(0)
+
+  fixtureId  String
+  fixtureRef Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+
+  marketId        Int
+  market          Market          @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  selectionId     Int
+  marketSelection MarketSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  lineValue       Decimal?
+
+  playerId  String?
+  playerRef Player? @relation(fields: [playerId], references: [id], onDelete: SetNull)
+
+  // Generated the same way getGeneratedDescription() builds a single bet's
+  // selection string, so existing display/CSV code paths that only know how
+  // to read a flat string keep working for the per-leg breakdown too.
+  description String
+
+  createdAt DateTime @default(now())
+
+  @@index([betId])
+  @@index([fixtureId])
+  @@index([marketId])
   @@index([playerId])
 }
 
@@ -120,6 +163,7 @@ model Fixture {
   createdAt          DateTime @default(now())
 
   bets Bet[]
+  legs BetLeg[]
 
   @@index([kickoffAt])
 }
@@ -153,6 +197,7 @@ model Market {
   selections MarketSelection[]
   lines      MarketLine[]
   bets       Bet[]
+  legs       BetLeg[]
 }
 
 model MarketSelection {
@@ -163,6 +208,7 @@ model MarketSelection {
   sortOrder Int    @default(0)
 
   bets Bet[]
+  legs BetLeg[]
 
   @@unique([marketId, label])
 }
@@ -192,6 +238,7 @@ model Player {
   createdAt      DateTime @default(now())
 
   bets Bet[]
+  legs BetLeg[]
 
   @@index([teamSportsDbId])
 }

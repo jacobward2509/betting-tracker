@@ -114,7 +114,22 @@
             </div>
           </div>
 
-          <div v-if="betType !== 'Accumulator'">
+          <div v-if="isMultiLegBetType">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Legs</label>
+            <BetLegsEditor
+              :key="legsEditorKey"
+              class="mt-1"
+              :bet-type="betType as 'Accumulator' | 'Bet Builder' | 'Cross Match Bet Builder'"
+              :fixtures="fixtures"
+              :fixtures-loading="fixturesLoading"
+              :markets="markets"
+              :initial-legs="initialLegsForEditor"
+              @update:model-value="legs = $event"
+              @validity-changed="legsValid = $event"
+            />
+          </div>
+
+          <div v-if="betType !== 'Accumulator' && !isMultiLegBetType">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
             <div class="mt-1 flex items-center gap-2">
               <input
@@ -296,8 +311,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import api from "@/lib/api";
+import BetLegsEditor from "@/components/BetLegsEditor.vue";
+
 import {
   decimalToFractionalOdds,
   formatOddsForDisplay,
@@ -321,7 +338,77 @@ const isSaving = ref(false);
 const bookmakers = ref<{ id: string; bookmakers: string }[]>([]);
 const betTypes = ref<{ id: number | string; betTypes: string }[]>([]);
 const playerPropMarkets = ref<{ id: number; markets: string }[]>([]);
-const fallbackBetTypes = ["Accumulator", "Bet Builder", "Match", "Player Prop", "Superboost", "Other"];
+
+// Structured catalog data + state, needed to power BetLegsEditor for the
+// three multi-leg bet types below (Accumulator / Bet Builder / Cross Match
+// Bet Builder). Player Prop/Match themselves still use the legacy flat
+// playerPropMarkets table above and are untouched by this.
+type MarketSelectionOption = { id: number; label: string; sortOrder: number };
+type MarketLineOption = { id: number; value: string; sortOrder: number };
+type MarketOption = {
+  id: number;
+  name: string;
+  category: "MATCH" | "PLAYER";
+  requiresPlayer: boolean;
+  selections: MarketSelectionOption[];
+  lines: MarketLineOption[];
+};
+type FixtureOption = { id: string; homeTeam: string; awayTeam: string; kickoffAt: string; league: string };
+
+const markets = ref<MarketOption[]>([]);
+const fixtures = ref<FixtureOption[]>([]);
+const fixturesLoading = ref(false);
+const legs = ref<Record<string, any>[]>([]);
+const legsValid = ref(false);
+const legsEditorKey = ref(0);
+const initialLegsForEditor = ref<
+  Array<{ fixtureId: string; marketId: number | string; selectionId: number | string; lineValue?: number | string | null; playerId?: string | null }>
+>([]);
+const isMultiLegBetType = computed(
+  () => betType.value === "Accumulator" || betType.value === "Bet Builder" || betType.value === "Cross Match Bet Builder",
+);
+const isHydrating = ref(false);
+
+
+const fetchMarkets = async () => {
+  try {
+    const res = await api.get("/api/markets");
+    markets.value = Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error("Failed to fetch markets:", error);
+  }
+};
+
+// Fixture dropdown for legs spans a wide date window (not just "today")
+// since an Accumulator/Bet Builder/Cross Match Bet Builder being edited may
+// reference fixtures from any recently-placed date.
+const fetchFixturesAroundDate = async (dateValue: string) => {
+  if (!dateValue) {
+    fixtures.value = [];
+    return;
+  }
+  fixturesLoading.value = true;
+  try {
+    const res = await api.get("/api/fixtures", { params: { date: dateValue } });
+    fixtures.value = Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error("Failed to fetch fixtures:", error);
+    fixtures.value = [];
+  } finally {
+    fixturesLoading.value = false;
+  }
+};
+
+const fallbackBetTypes = [
+  "Accumulator",
+  "Bet Builder",
+  "Cross Match Bet Builder",
+  "Match",
+  "Player Prop",
+  "Superboost",
+  "Other",
+];
+
 const authStore = useAuthStore();
 const suggestionsStore = useSuggestionsStore();
 
@@ -419,10 +506,10 @@ const parsePlayerPropSelection = (selection: string, market: string) => {
 };
 
 const getGeneratedDescription = () => {
-  if (betType.value === "Accumulator") return "Accumulator";
-  if (betType.value === "Bet Builder") return "Bet Builder";
+  if (isMultiLegBetType.value) return betType.value; // server derives the real summary from `legs`
   if (betType.value === "Superboost") return "Superboost";
   if (betType.value === "FT Result") {
+
     if (ftResultOutcome.value === "Draw") return "Draw";
     if (ftResultOutcome.value === "Home Win") return `${homeTeam.value.trim()} FT Result`;
     return `${awayTeam.value.trim()} FT Result`;
@@ -513,6 +600,10 @@ const filteredPlayerSuggestions = computed(() => {
 
 const hydrateFromBet = (bet: Record<string, any> | null) => {
   if (!bet) return;
+  isHydrating.value = true;
+  void nextTick().then(() => {
+    isHydrating.value = false;
+  });
 
   date.value = new Date(bet.placedAt).toISOString().slice(0, 10);
   fixture.value = String(bet.fixture || "");
@@ -534,7 +625,7 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
     player.value = "";
     playerPropLineWhole.value = 0;
   }
-  if (betType.value !== "Accumulator") {
+  if (!isMultiLegBetType.value && betType.value !== "Accumulator") {
     const fixtureParts = String(bet.fixture || "").split(/\s+vs\s+/i);
     homeTeam.value = String(fixtureParts[0] || "").trim();
     awayTeam.value = String(fixtureParts[1] || "").trim();
@@ -542,6 +633,7 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
     homeTeam.value = "";
     awayTeam.value = "";
   }
+
   if (betType.value === "FT Result") {
     const selection = String(bet.selection || "").trim();
     if (/^draw$/i.test(selection)) {
@@ -580,7 +672,27 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
   syncOddsFields();
   result.value = resultReverseMapping[String(bet.result || "OPEN")] || "Open";
   cashOutValue.value = bet.cashOutValue != null ? Number(bet.cashOutValue) : null;
+
+  if (isMultiLegBetType.value) {
+    const betLegs = Array.isArray(bet.legs) ? bet.legs : [];
+    initialLegsForEditor.value = betLegs.map((leg: Record<string, any>) => ({
+      fixtureId: String(leg.fixtureId || ""),
+      marketId: leg.marketId,
+      selectionId: leg.selectionId,
+      lineValue: leg.lineValue,
+      playerId: leg.playerId || null,
+    }));
+    void fetchMarkets();
+    void fetchFixturesAroundDate(date.value);
+    legs.value = [];
+    legsValid.value = false;
+    // Remount BetLegsEditor so it re-reads the freshly-hydrated initialLegs.
+    legsEditorKey.value += 1;
+  } else {
+    initialLegsForEditor.value = [];
+  }
 };
+
 
 const closeModal = () => {
   emit("update:modelValue", false);
@@ -639,8 +751,12 @@ const submitEdit = async () => {
       return;
     }
   }
-  if (betType.value !== "Accumulator" && (!homeTeam.value.trim() || !awayTeam.value.trim())) {
+  if (!isMultiLegBetType.value && (!homeTeam.value.trim() || !awayTeam.value.trim())) {
     alert("Home Team and Away Team are required.");
+    return;
+  }
+  if (isMultiLegBetType.value && !legsValid.value) {
+    alert(`Please complete all legs for ${betType.value}.`);
     return;
   }
   if (betType.value === "Player Prop" && !player.value.trim()) {
@@ -659,9 +775,7 @@ const submitEdit = async () => {
 
     const payload = {
       fixture:
-        betType.value === "Accumulator"
-          ? "Accumulator"
-          : `${homeTeam.value.trim()} vs ${awayTeam.value.trim()}`,
+        isMultiLegBetType.value ? betType.value : `${homeTeam.value.trim()} vs ${awayTeam.value.trim()}`,
       selection: generatedDescription,
       bookmaker: bookie.value,
       stakeType: stakeTypeMapping[stakeType.value] || "NORMAL",
@@ -674,7 +788,9 @@ const submitEdit = async () => {
       result: resultMapping[result.value],
       placedAt: new Date(date.value).toISOString(),
       cashOutValue: result.value === "Cashed Out" ? Number(cashOutValue.value) : null,
+      legs: isMultiLegBetType.value ? legs.value : undefined,
     };
+
 
     const res = await api.put(`/api/bets/${props.bet.id}`, payload);
     emit("bet-updated", res.data);
@@ -735,14 +851,26 @@ watch(betType, (value) => {
   if (value !== "FT Result") {
     ftResultOutcome.value = "Home Win";
   }
-  if (value === "Accumulator") {
+  if (isMultiLegBetType.value) {
     homeTeam.value = "";
     awayTeam.value = "";
+  }
+  if (!isHydrating.value && isMultiLegBetType.value) {
+    // User picked a different multi-leg bet type from the dropdown (rather
+    // than this firing as a side-effect of hydrateFromBet) — start that
+    // type's legs fresh instead of carrying over the previous type's legs.
+    initialLegsForEditor.value = [];
+    legs.value = [];
+    legsValid.value = false;
+    legsEditorKey.value += 1;
+    if (!markets.value.length) void fetchMarkets();
+    if (!fixtures.value.length) void fetchFixturesAroundDate(date.value);
   }
   if (value !== "Other") {
     otherBetType.value = "";
   }
 });
+
 
 watch(
   () => props.oddsFormat,

@@ -51,7 +51,22 @@
             />
           </div>
 
-          <div v-if="betType !== 'Accumulator'">
+          <div v-if="isMultiLegBetType">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Legs</label>
+            <BetLegsEditor
+              :key="legsEditorKey"
+              class="mt-1"
+
+              :bet-type="betType as 'Accumulator' | 'Bet Builder' | 'Cross Match Bet Builder'"
+              :fixtures="fixtures"
+              :fixtures-loading="fixturesLoading"
+              :markets="markets"
+              @update:model-value="legs = $event"
+              @validity-changed="legsValid = $event"
+            />
+          </div>
+
+          <div v-if="betType !== 'Accumulator' && !isMultiLegBetType">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
             <select
               v-model="selectedFixtureId"
@@ -164,31 +179,30 @@
 
           <div v-if="isMarketBetType && selectedMarket && selectedMarket.selections.length && !isYesOnlyMarket">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Selection</label>
-            <div class="mt-1 grid gap-3" :class="selectedMarket.lines.length ? 'sm:grid-cols-2' : ''">
-              <select
-                v-model="selectedSelectionId"
-                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                required
-                data-test-id="input-player-prop-selection"
-              >
-                <option disabled value="">Select selection</option>
-                <option v-for="s in selectedMarket.selections" :key="s.id" :value="s.id">
-                  {{ s.label }}
-                </option>
-              </select>
-              <select
-                v-if="selectedMarket.lines.length"
-                v-model="selectedLineValue"
-                class="block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                required
-                data-test-id="input-player-prop-line"
-              >
-                <option disabled value="">Select line</option>
-                <option v-for="l in selectedMarket.lines" :key="l.id" :value="l.value">
-                  {{ l.value }}
-                </option>
-              </select>
-            </div>
+            <select
+              v-if="shouldCombineSelectionAndLine(selectedMarket)"
+              v-model="combinedSelectionLine"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player-prop-selection-line"
+            >
+              <option disabled value="">Select selection</option>
+              <option v-for="o in combinedSelectionLineOptions" :key="o.value" :value="o.value">
+                {{ o.label }}
+              </option>
+            </select>
+            <select
+              v-else
+              v-model="selectedSelectionId"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player-prop-selection"
+            >
+              <option disabled value="">Select selection</option>
+              <option v-for="s in selectedMarket.selections" :key="s.id" :value="s.id">
+                {{ s.label }}
+              </option>
+            </select>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
@@ -385,6 +399,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import api from "@/lib/api";
+import BetLegsEditor from "@/components/BetLegsEditor.vue";
+import {
+  buildCombinedMarketOptions,
+  parseCombinedMarketOption,
+  shouldCombineSelectionAndLine,
+} from "@/utils/marketOptions";
+
+
 import {
   decimalToFractionalOdds,
   formatOddsForDisplay,
@@ -410,7 +432,16 @@ watch(
 const bookie = ref("");
 const bookmakers = ref<{ id: string; bookmakers: string }[]>([]);
 const betTypes = ref<{ id: number | string; betTypes: string }[]>([]);
-const fallbackBetTypes = ["Accumulator", "Bet Builder", "Match", "Player Prop", "Superboost", "Other"];
+const fallbackBetTypes = [
+  "Accumulator",
+  "Bet Builder",
+  "Cross Match Bet Builder",
+  "Match",
+  "Player Prop",
+  "Superboost",
+  "Other",
+];
+
 const userDefaultBookmaker = ref("");
 const userDefaultBetType = ref("Player Prop");
 const userDefaultStake = ref(5);
@@ -444,6 +475,17 @@ const matchMarkets = computed(() => markets.value.filter((m) => m.category === "
 // markets, "Match" surfaces MATCH markets, both sharing the same
 // Market/Selection/Line UI below.
 const isMarketBetType = computed(() => betType.value === "Player Prop" || betType.value === "Match");
+// Multi-leg bet types (Accumulator / Bet Builder / Cross Match Bet Builder)
+// are edited entirely via the shared BetLegsEditor component below rather
+// than the single fixture/market/selection fields used for Match/Player Prop.
+const isMultiLegBetType = computed(
+  () => betType.value === "Accumulator" || betType.value === "Bet Builder" || betType.value === "Cross Match Bet Builder",
+);
+const legs = ref<Record<string, any>[]>([]);
+const legsValid = ref(false);
+const legsEditorKey = ref(0);
+
+
 const currentMarketOptions = computed(() =>
   betType.value === "Match" ? matchMarkets.value : playerMarkets.value,
 );
@@ -462,6 +504,20 @@ const isYesOnlyMarket = computed(
 );
 const selectedSelectionId = ref<number | "">("");
 const selectedLineValue = ref<string>("");
+// UX-only combined "Selection + Line" dropdown (e.g. "Over 0.5") for markets
+// that have both — selectedSelectionId/selectedLineValue above remain the
+// actual source of truth submitted to the API; this just keeps them in
+// sync when the combined control is used instead of two separate ones.
+const combinedSelectionLine = ref<string>("");
+const combinedSelectionLineOptions = computed(() =>
+  selectedMarket.value ? buildCombinedMarketOptions(selectedMarket.value) : [],
+);
+watch(combinedSelectionLine, (value) => {
+  const parsed = value ? parseCombinedMarketOption(value) : null;
+  selectedSelectionId.value = parsed?.selectionId ?? "";
+  selectedLineValue.value = parsed?.lineValue ?? "";
+});
+
 
 const fixtures = ref<FixtureOption[]>([]);
 const fixturesLoading = ref(false);
@@ -763,7 +819,8 @@ const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) =
   bookie.value = userDefaultBookmaker.value || "";
   stakeType.value = "Normal";
   betType.value = keepBetType ? preservedBetType : userDefaultBetType.value || "Player Prop";
-  const keepingFixture = keepFixture && betType.value !== "Accumulator";
+  const keepingFixture = keepFixture && !isMultiLegBetType.value;
+
   selectedFixtureId.value = keepingFixture ? preservedFixtureId : "";
   homeTeam.value = keepingFixture ? preservedHomeTeam : "";
   awayTeam.value = keepingFixture ? preservedAwayTeam : "";
@@ -771,9 +828,14 @@ const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) =
   selectedMarketId.value = "";
   selectedSelectionId.value = "";
   selectedLineValue.value = "";
+  combinedSelectionLine.value = "";
   selectedPlayerId.value = "";
   manualPlayerName.value = "";
+  legs.value = [];
+  legsValid.value = false;
+  legsEditorKey.value += 1;
   cashOutValue.value = null;
+
   normalStake.value = null;
   freeStake.value = null;
   result.value = "Open";
@@ -846,8 +908,7 @@ const currentPlayerName = computed(() => {
 });
 
 const getGeneratedDescription = () => {
-  if (betType.value === "Accumulator") return "Accumulator";
-  if (betType.value === "Bet Builder") return "Bet Builder";
+  if (isMultiLegBetType.value) return betType.value; // server derives the real summary from `legs`
   if (betType.value === "Superboost") return "Superboost";
   if (betType.value === "Other") return otherBetType.value.trim();
 
@@ -859,6 +920,7 @@ const getGeneratedDescription = () => {
   const playerName = market?.requiresPlayer ? currentPlayerName.value : "";
   return [playerName, market?.name, selectionLabel, line].filter(Boolean).join(" ");
 };
+
 
 
 const submitBet = async () => {
@@ -913,8 +975,12 @@ const submitBet = async () => {
         return;
       }
     }
-    if (betType.value !== "Accumulator" && (!currentHomeTeam.value || !currentAwayTeam.value)) {
+    if (!isMultiLegBetType.value && (!currentHomeTeam.value || !currentAwayTeam.value)) {
       alert("A fixture (or Home/Away team) is required.");
+      return;
+    }
+    if (isMultiLegBetType.value && !legsValid.value) {
+      alert(`Please complete all legs for ${betType.value}.`);
       return;
     }
     if (isMarketBetType.value) {
@@ -946,7 +1012,7 @@ const submitBet = async () => {
 
     const payload = {
       fixture:
-        betType.value === "Accumulator" ? "Accumulator" : `${currentHomeTeam.value} vs ${currentAwayTeam.value}`,
+        isMultiLegBetType.value ? betType.value : `${currentHomeTeam.value} vs ${currentAwayTeam.value}`,
       selection: generatedDescription,
       bookmaker: bookie.value,
       stakeType: stakeTypeMapping[stakeType.value] || "NORMAL",
@@ -959,7 +1025,7 @@ const submitBet = async () => {
       result: resultMapping[result.value],
       cashOutValue: result.value === "Cashed Out" ? Number(cashOutValue.value) : null,
       placedAt: new Date(date.value).toISOString(),
-      fixtureId: betType.value !== "Accumulator" && !isManualFixture ? selectedFixtureId.value : null,
+      fixtureId: !isMultiLegBetType.value && !isManualFixture ? selectedFixtureId.value : null,
       marketId: isMarketBetType.value ? selectedMarketId.value || null : null,
       selectionId: isMarketBetType.value ? selectedSelectionId.value || null : null,
       lineValue:
@@ -968,14 +1034,17 @@ const submitBet = async () => {
         isMarketBetType.value && selectedPlayerId.value && selectedPlayerId.value !== "__manual__"
           ? selectedPlayerId.value
           : null,
+      legs: isMultiLegBetType.value ? legs.value : undefined,
     };
+
 
     const res = await api.post("/api/bets", payload);
 
     emit("bet-added", res.data); // send back created bet
 
     const hasFixture = Boolean(currentHomeTeam.value && currentAwayTeam.value);
-    const canRepeatFixture = betType.value !== "Accumulator" && hasFixture;
+    const canRepeatFixture = !isMultiLegBetType.value && hasFixture;
+
 
     if (canRepeatFixture) {
       pendingAddAnotherRepeat.value = true;
@@ -1027,6 +1096,7 @@ watch(selectedMarketId, () => {
   selectedLineValue.value = "";
   selectedPlayerId.value = "";
   manualPlayerName.value = "";
+  combinedSelectionLine.value = "";
   // "Yes"-only markets (e.g. Anytime Goalscorer) have exactly one possible
   // selection, so it's auto-applied rather than asking the user to pick it.
   if (isYesOnlyMarket.value && selectedMarket.value) {
@@ -1034,6 +1104,7 @@ watch(selectedMarketId, () => {
   } else {
     selectedSelectionId.value = "";
   }
+
 });
 
 watch(betType, (value) => {
@@ -1041,14 +1112,16 @@ watch(betType, (value) => {
     selectedMarketId.value = "";
     selectedSelectionId.value = "";
     selectedLineValue.value = "";
+    combinedSelectionLine.value = "";
     selectedPlayerId.value = "";
     manualPlayerName.value = "";
   }
-  if (value === "Accumulator") {
+  if (isMultiLegBetType.value) {
     homeTeam.value = "";
     awayTeam.value = "";
     selectedFixtureId.value = "";
   }
+
   if (value !== "Other") {
     otherBetType.value = "";
   }
