@@ -18,6 +18,7 @@
             <input
               type="date"
               v-model="date"
+              :max="maxBetDate"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               required
               data-test-id="input-date"
@@ -39,20 +40,6 @@
             </select>
           </div>
 
-          <div v-if="betType === 'FT Result'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">FT Result</label>
-            <select
-              v-model="ftResultOutcome"
-              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              required
-              data-test-id="input-ft-result-outcome"
-            >
-              <option>Home Win</option>
-              <option>Draw</option>
-              <option>Away Win</option>
-            </select>
-          </div>
-
           <div v-if="betType === 'Other'">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
             <input
@@ -64,64 +51,41 @@
             />
           </div>
 
-          <div v-if="betType === 'Player Prop'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Player</label>
-            <input
-              v-model="player"
-              type="text"
-              list="add-player-suggestions"
+          <div v-if="isMultiLegBetType">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Legs</label>
+            <BetLegsEditor
+              :key="legsEditorKey"
+              class="mt-1"
+
+              :bet-type="betType as 'Accumulator' | 'Bet Builder' | 'Cross Match Bet Builder'"
+              :fixtures="fixtures"
+              :fixtures-loading="fixturesLoading"
+              :markets="markets"
+              @update:model-value="legs = $event"
+              @validity-changed="legsValid = $event"
+            />
+          </div>
+
+          <div v-if="betType !== 'Accumulator' && !isMultiLegBetType">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
+            <select
+              v-model="selectedFixtureId"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               required
-              data-test-id="input-player"
-            />
-            <datalist id="add-player-suggestions">
-              <option v-for="name in filteredPlayerSuggestions" :key="`add-player-${name}`" :value="name" />
-            </datalist>
-          </div>
-
-          <div v-if="betType === 'Player Prop'" class="grid gap-3 sm:grid-cols-2">
-            <div :class="requiresHalfStepLine(playerPropMarket) ? '' : 'sm:col-span-2'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Player Prop Market</label>
-              <select
-                v-model="playerPropMarket"
-                class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                :required="betType === 'Player Prop'"
-                data-test-id="input-player-prop-market"
-              >
-                <option disabled value="">Select market</option>
-                <option
-                  v-for="market in playerPropMarkets"
-                  :key="market.id"
-                  :value="market.markets"
-                >
-                  {{ market.markets }}
+              data-test-id="input-fixture"
+            >
+              <option disabled value="">
+                {{ fixturesLoading ? "Loading fixtures..." : "Select fixture" }}
+              </option>
+              <optgroup v-for="group in fixturesByLeague" :key="group.league" :label="group.label">
+                <option v-for="f in group.fixtures" :key="f.id" :value="f.id">
+                  {{ f.homeTeam }} vs {{ f.awayTeam }}
                 </option>
-              </select>
-            </div>
-            <div v-if="requiresHalfStepLine(playerPropMarket)">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Value</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input
-                  v-model.number="playerPropLineWhole"
-                  type="number"
-                  min="0"
-                  step="1"
-                  class="block w-20 border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                  required
-                  data-test-id="input-player-prop-line-whole"
-                />
-                <input
-                  value=".5"
-                  readonly
-                  class="block w-16 border rounded px-3 py-2 bg-gray-100 text-gray-700 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-200"
-                />
-              </div>
-            </div>
-          </div>
+              </optgroup>
+              <option value="__manual__">Other / not listed</option>
+            </select>
 
-          <div v-if="betType !== 'Accumulator'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
-            <div class="mt-1 flex items-center gap-2">
+            <div v-if="selectedFixtureId === '__manual__'" class="mt-2 flex items-center gap-2">
               <input
                 v-model="homeTeam"
                 type="text"
@@ -148,6 +112,105 @@
             <datalist id="add-away-team-suggestions">
               <option v-for="team in filteredAwayTeamSuggestions" :key="`add-away-team-${team}`" :value="team" />
             </datalist>
+          </div>
+
+          <div v-if="isMarketBetType && hasFixtureSelected">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Market</label>
+            <select
+              v-model="selectedMarketId"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player-prop-market"
+            >
+              <option disabled value="">Select market</option>
+              <option v-for="market in currentMarketOptions" :key="market.id" :value="market.id">
+                {{ market.name }}
+              </option>
+            </select>
+          </div>
+
+
+          <div v-if="isMarketBetType && selectedMarket && selectedMarket.requiresPlayer">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Player</label>
+            <select
+              v-model="selectedPlayerId"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player"
+            >
+              <option disabled value="">
+                {{ playersLoading ? "Loading players..." : "Select player" }}
+              </option>
+              <optgroup v-if="fixturePlayers.homeTeam" :label="fixturePlayers.homeTeam">
+                <option
+                  v-for="p in filterPlayersForMarket(
+                    fixturePlayers.players.filter((pl) => pl.teamName === fixturePlayers.homeTeam),
+                    selectedMarket,
+                  )"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  {{ p.name }}
+                </option>
+              </optgroup>
+              <optgroup v-if="fixturePlayers.awayTeam" :label="fixturePlayers.awayTeam">
+                <option
+                  v-for="p in filterPlayersForMarket(
+                    fixturePlayers.players.filter((pl) => pl.teamName === fixturePlayers.awayTeam),
+                    selectedMarket,
+                  )"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  {{ p.name }}
+                </option>
+              </optgroup>
+
+              <option value="__manual__">Other / not listed</option>
+
+            </select>
+
+            <input
+              v-if="selectedPlayerId === '__manual__'"
+              v-model="manualPlayerName"
+              type="text"
+              list="add-player-suggestions"
+              placeholder="Player name"
+              class="mt-2 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player-manual"
+            />
+            <datalist id="add-player-suggestions">
+              <option v-for="name in filteredPlayerSuggestions" :key="`add-player-${name}`" :value="name" />
+            </datalist>
+          </div>
+
+          <div v-if="isMarketBetType && selectedMarket && selectedMarket.selections.length && !isYesOnlyMarket">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Selection</label>
+            <select
+              v-if="shouldCombineSelectionAndLine(selectedMarket)"
+              v-model="combinedSelectionLine"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player-prop-selection-line"
+            >
+              <option disabled value="">Select selection</option>
+              <option v-for="o in combinedSelectionLineOptions" :key="o.value" :value="o.value">
+                {{ o.label }}
+              </option>
+            </select>
+            <select
+              v-else
+              v-model="selectedSelectionId"
+              class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              required
+              data-test-id="input-player-prop-selection"
+            >
+              <option disabled value="">Select selection</option>
+              <option v-for="s in selectedMarket.selections" :key="s.id" :value="s.id">
+                {{ s.label }}
+              </option>
+            </select>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
@@ -258,6 +321,31 @@
             </div>
           </div>
 
+          <div>
+            <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+              <input
+                v-model="isOddsBoost"
+                type="checkbox"
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                data-test-id="input-odds-boost-checkbox"
+              />
+              Odds Boost?
+            </label>
+            <div v-if="isOddsBoost" class="mt-2">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Boost (%)</label>
+              <input
+                v-model.number="oddsBoostPercent"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 25"
+                class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                required
+                data-test-id="input-odds-boost-percent"
+              />
+            </div>
+          </div>
+
           <div class="grid gap-3 sm:grid-cols-2">
             <div :class="result === 'Cashed Out' ? '' : 'sm:col-span-2'">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Result</label>
@@ -344,7 +432,18 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import api from "@/lib/api";
+import BetLegsEditor from "@/components/BetLegsEditor.vue";
 import {
+  buildCombinedMarketOptions,
+  filterPlayersForMarket,
+  parseCombinedMarketOption,
+  shouldCombineSelectionAndLine,
+} from "@/utils/marketOptions";
+import { groupFixturesByLeague } from "@/utils/fixtureGrouping";
+
+
+import {
+  applyOddsBoost,
   decimalToFractionalOdds,
   formatOddsForDisplay,
   normalizeOddsPrecision,
@@ -369,13 +468,131 @@ watch(
 const bookie = ref("");
 const bookmakers = ref<{ id: string; bookmakers: string }[]>([]);
 const betTypes = ref<{ id: number | string; betTypes: string }[]>([]);
-const playerPropMarkets = ref<{ id: number; markets: string }[]>([]);
-const fallbackBetTypes = ["Accumulator", "Bet Builder", "Player Prop", "Superboost", "FT Result", "Other"];
+const fallbackBetTypes = [
+  "Accumulator",
+  "Bet Builder",
+  "Cross Match Bet Builder",
+  "Match",
+  "Player Prop",
+  "Superboost",
+  "Other",
+];
+
 const userDefaultBookmaker = ref("");
 const userDefaultBetType = ref("Player Prop");
 const userDefaultStake = ref(5);
 const authStore = useAuthStore();
 const suggestionsStore = useSuggestionsStore();
+
+type MarketSelectionOption = { id: number; label: string; sortOrder: number };
+type MarketLineOption = { id: number; value: string; sortOrder: number };
+type MarketOption = {
+  id: number;
+  name: string;
+  category: "MATCH" | "PLAYER";
+  requiresPlayer: boolean;
+  selections: MarketSelectionOption[];
+  lines: MarketLineOption[];
+};
+type FixtureOption = {
+  id: string;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffAt: string;
+  league: string;
+};
+type PlayerOption = { id: string; name: string; teamName: string; position?: string | null };
+
+
+const markets = ref<MarketOption[]>([]);
+const playerMarkets = computed(() => markets.value.filter((m) => m.category === "PLAYER"));
+const matchMarkets = computed(() => markets.value.filter((m) => m.category === "MATCH"));
+// Bet types that are backed by the structured Market catalog rather than
+// being their own standalone concept — "Player Prop" surfaces PLAYER
+// markets, "Match" surfaces MATCH markets, both sharing the same
+// Market/Selection/Line UI below.
+const isMarketBetType = computed(() => betType.value === "Player Prop" || betType.value === "Match");
+// Multi-leg bet types (Accumulator / Bet Builder / Cross Match Bet Builder)
+// are edited entirely via the shared BetLegsEditor component below rather
+// than the single fixture/market/selection fields used for Match/Player Prop.
+const isMultiLegBetType = computed(
+  () => betType.value === "Accumulator" || betType.value === "Bet Builder" || betType.value === "Cross Match Bet Builder",
+);
+// Of the three multi-leg bet types, only Accumulator and Cross Match Bet
+// Builder can have legs spread across several different days (e.g. a
+// Saturday + Sunday fixture in the same bet), so only those two need the
+// wider multi-day fixture window below. Bet Builder is always a single
+// fixture, so it only ever needs fixtures from the bet’s own Date field.
+const isMultiDateBetType = computed(
+  () => betType.value === "Accumulator" || betType.value === "Cross Match Bet Builder",
+);
+const legs = ref<Record<string, any>[]>([]);
+const legsValid = ref(false);
+const legsEditorKey = ref(0);
+
+
+const currentMarketOptions = computed(() =>
+  betType.value === "Match" ? matchMarkets.value : playerMarkets.value,
+);
+const selectedMarketId = ref<number | "">("");
+const selectedMarket = computed(
+  () => markets.value.find((m) => m.id === selectedMarketId.value) || null,
+);
+// Markets seeded with a single "Yes" selection (e.g. Anytime Goalscorer,
+// Player to be Carded) don't need the user to pick anything — Yes is the
+// only possible outcome, so the Selection field is hidden entirely and the
+// selection is auto-applied (see the selectedMarketId watcher below).
+const isYesOnlyMarket = computed(
+  () =>
+    selectedMarket.value?.selections.length === 1 &&
+    selectedMarket.value?.selections[0]?.label === "Yes",
+);
+const selectedSelectionId = ref<number | "">("");
+const selectedLineValue = ref<string>("");
+// UX-only combined "Selection + Line" dropdown (e.g. "Over 0.5") for markets
+// that have both — selectedSelectionId/selectedLineValue above remain the
+// actual source of truth submitted to the API; this just keeps them in
+// sync when the combined control is used instead of two separate ones.
+const combinedSelectionLine = ref<string>("");
+const combinedSelectionLineOptions = computed(() =>
+  selectedMarket.value ? buildCombinedMarketOptions(selectedMarket.value) : [],
+);
+watch(combinedSelectionLine, (value) => {
+  const parsed = value ? parseCombinedMarketOption(value) : null;
+  selectedSelectionId.value = parsed?.selectionId ?? "";
+  selectedLineValue.value = parsed?.lineValue ?? "";
+});
+
+
+const fixtures = ref<FixtureOption[]>([]);
+const fixturesLoading = ref(false);
+const selectedFixtureId = ref<string>("");
+
+// Fixtures grouped into <optgroup> sections by league priority — see
+// groupFixturesByLeague in @/utils/fixtureGrouping for ordering details.
+const fixturesByLeague = computed(() => groupFixturesByLeague(fixtures.value));
+
+// True once a fixture has actually been chosen — either a listed fixture or
+// the manual "Other / not listed" entry with both team names filled in.
+// Gates the Market field below so it isn't shown before a fixture exists to
+// scope the market to.
+const hasFixtureSelected = computed(() => {
+  if (!selectedFixtureId.value) return false;
+  if (selectedFixtureId.value === "__manual__") {
+    return Boolean(homeTeam.value.trim() && awayTeam.value.trim());
+  }
+  return true;
+});
+
+
+const fixturePlayers = ref<{ homeTeam: string; awayTeam: string; players: PlayerOption[] }>({
+  homeTeam: "",
+  awayTeam: "",
+  players: [],
+});
+const playersLoading = ref(false);
+const selectedPlayerId = ref<string>("");
+const manualPlayerName = ref("");
 
 const fetchBookmakers = async () => {
   try {
@@ -404,12 +621,91 @@ const fetchBetTypes = async () => {
   }
 };
 
-const fetchPlayerPropMarkets = async () => {
+const fetchMarkets = async () => {
   try {
-    const res = await api.get("/api/player-prop-markets");
-    playerPropMarkets.value = res.data;
+    const res = await api.get("/api/markets");
+    markets.value = Array.isArray(res.data) ? res.data : [];
   } catch (error) {
-    console.error("Failed to fetch player prop markets:", error);
+    console.error("Failed to fetch markets:", error);
+  }
+};
+
+const fetchFixturesForDate = async (dateValue: string) => {
+  if (!dateValue) {
+    fixtures.value = [];
+    return;
+  }
+  fixturesLoading.value = true;
+  try {
+    const res = await api.get("/api/fixtures", { params: { date: dateValue } });
+    fixtures.value = Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error("Failed to fetch fixtures:", error);
+    fixtures.value = [];
+  } finally {
+    fixturesLoading.value = false;
+  }
+};
+
+// Multi-leg bet types (Accumulator / Cross Match Bet Builder) can draw legs
+// from fixtures spanning several days (e.g. a Saturday + Sunday fixture in
+// the same bet), so their fixture list is fetched as a window centered on
+// the bet's Date field (+/- 7 days) rather than that single day, via the
+// from/to range form of GET /api/fixtures. The future edge is still capped
+// at maxBetDate, matching the API's own MAX_FIXTURE_LOOKAHEAD_DAYS cap.
+const FIXTURE_RANGE_LOOKBACK_DAYS = 7;
+const fetchFixturesForRangeAround = async (centerDateValue: string) => {
+  if (!centerDateValue) {
+    fixtures.value = [];
+    return;
+  }
+  const center = new Date(`${centerDateValue}T00:00:00Z`);
+  if (!Number.isFinite(center.getTime())) {
+    fixtures.value = [];
+    return;
+  }
+  const from = new Date(center);
+  from.setUTCDate(from.getUTCDate() - FIXTURE_RANGE_LOOKBACK_DAYS);
+  const to = new Date(center);
+  to.setUTCDate(to.getUTCDate() + FIXTURE_RANGE_LOOKBACK_DAYS);
+  const maxFuture = new Date(`${maxBetDate.value}T00:00:00Z`);
+  const cappedTo = to.getTime() > maxFuture.getTime() ? maxFuture : to;
+
+  fixturesLoading.value = true;
+  try {
+    const res = await api.get("/api/fixtures", {
+      params: { from: from.toISOString().slice(0, 10), to: cappedTo.toISOString().slice(0, 10) },
+    });
+    fixtures.value = Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error("Failed to fetch fixtures:", error);
+    fixtures.value = [];
+  } finally {
+    fixturesLoading.value = false;
+  }
+};
+
+const fetchFixturesForLegs = async (dateValue: string) =>
+  isMultiDateBetType.value ? fetchFixturesForRangeAround(dateValue) : fetchFixturesForDate(dateValue);
+
+const fetchPlayersForFixture = async (fixtureId: string) => {
+  if (!fixtureId || fixtureId === "__manual__") {
+    fixturePlayers.value = { homeTeam: "", awayTeam: "", players: [] };
+    return;
+  }
+  playersLoading.value = true;
+  try {
+    const res = await api.get(`/api/fixtures/${fixtureId}/players`);
+    fixturePlayers.value = {
+      homeTeam: res.data?.homeTeam || "",
+      awayTeam: res.data?.awayTeam || "",
+      players: Array.isArray(res.data?.players) ? res.data.players : [],
+    };
+  } catch (error) {
+    console.error("Failed to fetch players for fixture:", error);
+    fixturePlayers.value = { homeTeam: "", awayTeam: "", players: [] };
+  } finally {
+    playersLoading.value = false;
   }
 };
 
@@ -434,7 +730,7 @@ const buildFilteredTeamSuggestions = (term: string) => {
 const filteredHomeTeamSuggestions = computed(() => buildFilteredTeamSuggestions(homeTeam.value));
 const filteredAwayTeamSuggestions = computed(() => buildFilteredTeamSuggestions(awayTeam.value));
 const filteredPlayerSuggestions = computed(() => {
-  const normalized = String(player.value || "")
+  const normalized = String(manualPlayerName.value || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
@@ -483,7 +779,8 @@ const onUserConfigUpdated = async () => {
 onMounted(() => {
   fetchBookmakers();
   fetchBetTypes();
-  fetchPlayerPropMarkets();
+  fetchMarkets();
+  fetchFixturesForLegs(date.value);
   if (authStore.user?.id) {
     void suggestionsStore.preloadSuggestions(authStore.user.id);
   }
@@ -498,22 +795,28 @@ onBeforeUnmount(() => {
 });
 
 const date = ref(new Date().toISOString().substr(0, 10));
+// Add Bet only allows logging a bet up to 7 days in advance of today,
+// matching the server-side cap enforced by GET /api/fixtures.
+const MAX_BET_LOOKAHEAD_DAYS = 7;
+const maxBetDate = computed(() => {
+  const max = new Date();
+  max.setUTCDate(max.getUTCDate() + MAX_BET_LOOKAHEAD_DAYS);
+  return max.toISOString().substr(0, 10);
+});
 const result = ref("Open");
 const fixture = ref("");
 const stakeType = ref("Normal");
 const betType = ref("Player Prop");
-const ftResultOutcome = ref<"Home Win" | "Draw" | "Away Win">("Home Win");
 const homeTeam = ref("");
 const awayTeam = ref("");
 const otherBetType = ref("");
-const player = ref("");
-const playerPropMarket = ref("");
-const playerPropLineWhole = ref(0);
 const stake = ref(5);
 const odds = ref(2);
 const oddsInput = ref("2");
 const oddsNumerator = ref(1);
 const oddsDenominator = ref(1);
+const isOddsBoost = ref(false);
+const oddsBoostPercent = ref<number | null>(null);
 const cashOutValue = ref<number | null>(null);
 const normalStake = ref<number | null>(null);
 const freeStake = ref<number | null>(null);
@@ -535,6 +838,7 @@ const syncOddsFields = () => {
 const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) => {
   const keepFixture = Boolean(options?.keepFixture);
   const keepBetType = Boolean(options?.keepBetType);
+  const preservedFixtureId = selectedFixtureId.value;
   const preservedHomeTeam = homeTeam.value.trim();
   const preservedAwayTeam = awayTeam.value.trim();
   const preservedBetType = betType.value;
@@ -543,23 +847,33 @@ const resetForm = (options?: { keepFixture?: boolean; keepBetType?: boolean }) =
   bookie.value = userDefaultBookmaker.value || "";
   stakeType.value = "Normal";
   betType.value = keepBetType ? preservedBetType : userDefaultBetType.value || "Player Prop";
-  ftResultOutcome.value = "Home Win";
-  homeTeam.value =
-    keepFixture && betType.value !== "Accumulator" ? preservedHomeTeam : "";
-  awayTeam.value =
-    keepFixture && betType.value !== "Accumulator" ? preservedAwayTeam : "";
+  const keepingFixture = keepFixture && !isMultiLegBetType.value;
+
+  selectedFixtureId.value = keepingFixture ? preservedFixtureId : "";
+  homeTeam.value = keepingFixture ? preservedHomeTeam : "";
+  awayTeam.value = keepingFixture ? preservedAwayTeam : "";
   otherBetType.value = "";
-  player.value = "";
-  playerPropMarket.value = "";
-  playerPropLineWhole.value = 0;
+  selectedMarketId.value = "";
+  selectedSelectionId.value = "";
+  selectedLineValue.value = "";
+  combinedSelectionLine.value = "";
+  selectedPlayerId.value = "";
+  manualPlayerName.value = "";
+  legs.value = [];
+  legsValid.value = false;
+  legsEditorKey.value += 1;
   cashOutValue.value = null;
+
   normalStake.value = null;
   freeStake.value = null;
   result.value = "Open";
   stake.value = userDefaultStake.value;
   odds.value = 2;
+  isOddsBoost.value = false;
+  oddsBoostPercent.value = null;
   syncOddsFields();
 };
+
 
 const closeModal = () => {
   showAddAnotherPrompt.value = false;
@@ -605,22 +919,39 @@ const halfStepMarkets = new Set([
 
 const requiresHalfStepLine = (market: string) => halfStepMarkets.has(String(market || ""));
 
+// The currently-selected fixture's team names, whether picked from the
+// dropdown or entered manually via "Other / not listed".
+const currentHomeTeam = computed(() =>
+  selectedFixtureId.value && selectedFixtureId.value !== "__manual__"
+    ? fixtures.value.find((f) => f.id === selectedFixtureId.value)?.homeTeam || ""
+    : homeTeam.value.trim(),
+);
+const currentAwayTeam = computed(() =>
+  selectedFixtureId.value && selectedFixtureId.value !== "__manual__"
+    ? fixtures.value.find((f) => f.id === selectedFixtureId.value)?.awayTeam || ""
+    : awayTeam.value.trim(),
+);
+
+const currentPlayerName = computed(() => {
+  if (selectedPlayerId.value === "__manual__") return manualPlayerName.value.trim();
+  return fixturePlayers.value.players.find((p) => p.id === selectedPlayerId.value)?.name || "";
+});
+
 const getGeneratedDescription = () => {
-  if (betType.value === "Accumulator") return "Accumulator";
-  if (betType.value === "Bet Builder") return "Bet Builder";
+  if (isMultiLegBetType.value) return betType.value; // server derives the real summary from `legs`
   if (betType.value === "Superboost") return "Superboost";
-  if (betType.value === "FT Result") {
-    if (ftResultOutcome.value === "Draw") return "Draw";
-    if (ftResultOutcome.value === "Home Win") return `${homeTeam.value.trim()} FT Result`;
-    return `${awayTeam.value.trim()} FT Result`;
-  }
   if (betType.value === "Other") return otherBetType.value.trim();
 
-  const playerName = player.value.trim();
-  const market = playerPropMarket.value.trim();
-  const line = requiresHalfStepLine(market) ? `${Number(playerPropLineWhole.value)}.5` : "";
-  return [playerName, market, line].filter(Boolean).join(" ");
+  const market = selectedMarket.value;
+  const selectionLabel = isYesOnlyMarket.value
+    ? ""
+    : market?.selections.find((s) => s.id === selectedSelectionId.value)?.label || "";
+  const line = selectedLineValue.value ? String(selectedLineValue.value) : "";
+  const playerName = market?.requiresPlayer ? currentPlayerName.value : "";
+  return [playerName, market?.name, selectionLabel, line].filter(Boolean).join(" ");
 };
+
+
 
 const submitBet = async () => {
   try {
@@ -652,6 +983,18 @@ const submitBet = async () => {
     }
     odds.value = parsedOdds;
 
+    if (isOddsBoost.value && (oddsBoostPercent.value == null || Number(oddsBoostPercent.value) <= 0)) {
+      alert("Please enter a valid Odds Boost percentage.");
+      return;
+    }
+    const finalOdds = isOddsBoost.value
+      ? applyOddsBoost(odds.value, Number(oddsBoostPercent.value))
+      : odds.value;
+    if (finalOdds == null) {
+      alert("Please enter valid odds.");
+      return;
+    }
+
     if (result.value === "Cashed Out" && (cashOutValue.value == null || cashOutValue.value < 0)) {
       alert("Please enter a valid Cash Out value.");
       return;
@@ -674,25 +1017,30 @@ const submitBet = async () => {
         return;
       }
     }
-    if (betType.value !== "Accumulator" && (!homeTeam.value.trim() || !awayTeam.value.trim())) {
-      alert("Home Team and Away Team are required.");
+    if (!isMultiLegBetType.value && (!currentHomeTeam.value || !currentAwayTeam.value)) {
+      alert("A fixture (or Home/Away team) is required.");
       return;
     }
-    if (betType.value === "Player Prop") {
-      if (!player.value.trim()) {
-        alert("Player is required for Player Prop.");
+    if (isMultiLegBetType.value && !legsValid.value) {
+      alert(`Please complete all legs for ${betType.value}.`);
+      return;
+    }
+    if (isMarketBetType.value) {
+      if (!selectedMarketId.value) {
+        alert(`A market is required for ${betType.value}.`);
         return;
       }
-      if (!playerPropMarket.value.trim()) {
-        alert("Player Prop Market is required.");
+      const market = selectedMarket.value;
+      if (market?.requiresPlayer && !currentPlayerName.value) {
+        alert("Player is required for this market.");
         return;
       }
-      if (
-        requiresHalfStepLine(playerPropMarket.value) &&
-        (!Number.isInteger(Number(playerPropLineWhole.value)) ||
-          Number(playerPropLineWhole.value) < 0)
-      ) {
-        alert("Value must be a whole number on the left side.");
+      if (market && market.selections.length && !isYesOnlyMarket.value && !selectedSelectionId.value) {
+        alert("A selection is required for this market.");
+        return;
+      }
+      if (market && market.lines.length && !selectedLineValue.value) {
+        alert("A line is required for this market.");
         return;
       }
     }
@@ -702,32 +1050,45 @@ const submitBet = async () => {
     }
 
     const generatedDescription = getGeneratedDescription();
+    const isManualFixture = selectedFixtureId.value === "__manual__" || !selectedFixtureId.value;
 
     const payload = {
       fixture:
-        betType.value === "Accumulator"
-          ? "Accumulator"
-          : `${homeTeam.value.trim()} vs ${awayTeam.value.trim()}`,
+        isMultiLegBetType.value ? betType.value : `${currentHomeTeam.value} vs ${currentAwayTeam.value}`,
       selection: generatedDescription,
       bookmaker: bookie.value,
       stakeType: stakeTypeMapping[stakeType.value] || "NORMAL",
       normalStake: isNormalPlusFree ? Number(normalStake.value) : null,
       betType: betType.value,
-      playerPropMarket: betType.value === "Player Prop" ? playerPropMarket.value : null,
+      playerPropMarket: isMarketBetType.value ? selectedMarket.value?.name || null : null,
       stake: totalStake,
-      odds: Number(odds.value),
-      potentialReturn: totalStake * Number(odds.value),
+      odds: Number(finalOdds),
+      oddsBoostPercent: isOddsBoost.value ? Number(oddsBoostPercent.value) : null,
+      potentialReturn: totalStake * Number(finalOdds),
       result: resultMapping[result.value],
       cashOutValue: result.value === "Cashed Out" ? Number(cashOutValue.value) : null,
       placedAt: new Date(date.value).toISOString(),
+      fixtureId: !isMultiLegBetType.value && !isManualFixture ? selectedFixtureId.value : null,
+      marketId: isMarketBetType.value ? selectedMarketId.value || null : null,
+      selectionId: isMarketBetType.value ? selectedSelectionId.value || null : null,
+      lineValue:
+        isMarketBetType.value && selectedLineValue.value ? Number(selectedLineValue.value) : null,
+      playerId:
+        isMarketBetType.value && selectedPlayerId.value && selectedPlayerId.value !== "__manual__"
+          ? selectedPlayerId.value
+          : null,
+      legs: isMultiLegBetType.value ? legs.value : undefined,
     };
+
 
     const res = await api.post("/api/bets", payload);
 
     emit("bet-added", res.data); // send back created bet
 
-    const hasFixture = Boolean(homeTeam.value.trim() && awayTeam.value.trim());
-    const canRepeatFixture = betType.value !== "Accumulator" && hasFixture;
+    const hasFixture = Boolean(currentHomeTeam.value && currentAwayTeam.value);
+    const canRepeatFixture = !isMultiLegBetType.value && hasFixture;
+
+
     if (canRepeatFixture) {
       pendingAddAnotherRepeat.value = true;
       showAddAnotherPrompt.value = true;
@@ -757,23 +1118,67 @@ watch(stakeType, (value) => {
   }
 });
 
-watch(betType, (value) => {
-  if (value !== "Player Prop") {
-    player.value = "";
-    playerPropMarket.value = "";
-    playerPropLineWhole.value = 0;
-  }
-  if (value !== "FT Result") {
-    ftResultOutcome.value = "Home Win";
-  }
-  if (value === "Accumulator") {
+watch(date, (value) => {
+  selectedFixtureId.value = "";
+  fetchFixturesForLegs(value);
+});
+
+watch(selectedFixtureId, (value) => {
+  selectedPlayerId.value = "";
+  manualPlayerName.value = "";
+  if (value && value !== "__manual__") {
     homeTeam.value = "";
     awayTeam.value = "";
+    fetchPlayersForFixture(value);
+  } else {
+    fixturePlayers.value = { homeTeam: "", awayTeam: "", players: [] };
   }
+});
+
+watch(selectedMarketId, () => {
+  selectedLineValue.value = "";
+  selectedPlayerId.value = "";
+  manualPlayerName.value = "";
+  combinedSelectionLine.value = "";
+  // "Yes"-only markets (e.g. Anytime Goalscorer) have exactly one possible
+  // selection, so it's auto-applied rather than asking the user to pick it.
+  if (isYesOnlyMarket.value && selectedMarket.value) {
+    selectedSelectionId.value = selectedMarket.value.selections[0].id;
+  } else {
+    selectedSelectionId.value = "";
+  }
+
+});
+
+watch(betType, (value) => {
+  if (value !== "Player Prop" && value !== "Match") {
+    selectedMarketId.value = "";
+    selectedSelectionId.value = "";
+    selectedLineValue.value = "";
+    combinedSelectionLine.value = "";
+    selectedPlayerId.value = "";
+    manualPlayerName.value = "";
+  }
+  if (isMultiLegBetType.value) {
+    homeTeam.value = "";
+    awayTeam.value = "";
+    selectedFixtureId.value = "";
+  }
+
   if (value !== "Other") {
     otherBetType.value = "";
   }
 });
+
+// Accumulator/Cross Match Bet Builder need a multi-day fixture window while
+// every other bet type (including Bet Builder) needs only the single
+// Date-field day — refetch whenever a bet-type change crosses that boundary
+// in either direction.
+watch(isMultiDateBetType, () => {
+  fetchFixturesForLegs(date.value);
+});
+
+
 
 watch(
   () => props.oddsFormat,

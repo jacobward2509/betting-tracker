@@ -27,7 +27,7 @@ test.describe('Auth Signup - Betting Preferences', () => {
     await expect(
       authPage.defaultBookmakerSelect.locator('option'),
       'Default Bookmaker select should list all bookmakers in order',
-    ).toHaveText([...AuthPage.EXPECTED_BOOKMAKERS]);
+    ).toHaveText([...AuthPage.EXPECTED_BOOKMAKER_LABELS]);
     await expect(authPage.defaultBookmakerSelect, 'Default Bookmaker select should default to Bet365').toHaveValue(
       AuthPage.DEFAULT_BOOKMAKER,
     );
@@ -55,7 +55,7 @@ test.describe('Auth Signup - Betting Preferences', () => {
     await expect(
       authPage.defaultBookmakerSelect.locator('option'),
       'Betfair should be removed from the Default Bookmaker options, leaving the rest in order',
-    ).toHaveText(AuthPage.EXPECTED_BOOKMAKERS.filter((bookmaker) => bookmaker !== 'Betfair'));
+    ).toHaveText(AuthPage.EXPECTED_BOOKMAKER_LABELS.filter((_, index) => AuthPage.EXPECTED_BOOKMAKERS[index] !== 'Betfair'));
   });
 
   test('The last remaining bookmaker checkbox cannot be unchecked', async ({ page }) => {
@@ -64,6 +64,7 @@ test.describe('Auth Signup - Betting Preferences', () => {
 
     const bookmakersExceptLast = AuthPage.EXPECTED_BOOKMAKERS.slice(0, -1);
     const lastBookmaker = AuthPage.EXPECTED_BOOKMAKERS[AuthPage.EXPECTED_BOOKMAKERS.length - 1];
+    const lastBookmakerLabel = AuthPage.EXPECTED_BOOKMAKER_LABELS[AuthPage.EXPECTED_BOOKMAKER_LABELS.length - 1];
 
     for (const bookmaker of bookmakersExceptLast) {
       await authPage.toggleBookmaker(bookmaker);
@@ -79,7 +80,7 @@ test.describe('Auth Signup - Betting Preferences', () => {
     await expect(
       authPage.defaultBookmakerSelect.locator('option'),
       'Default Bookmaker select should only offer the one remaining bookmaker',
-    ).toHaveText([lastBookmaker]);
+    ).toHaveText([lastBookmakerLabel]);
   });
 });
 

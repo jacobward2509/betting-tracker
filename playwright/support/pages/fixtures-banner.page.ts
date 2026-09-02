@@ -24,14 +24,14 @@ export class FixturesBannerPage {
 
   /** Mocks GET /api/fixtures/today to return the given fixtures array (or an error status). */
   async mockFixtures(fixtures: unknown[]) {
-    await this.page.route('**/api/fixtures/today', async (route) => {
+    await this.page.route('**/api/fixtures/today**', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixtures) });
     });
   }
 
   /** Mocks GET /api/fixtures/today to fail with the given status (default 500). */
   async mockFixturesFailure(status = 500) {
-    await this.page.route('**/api/fixtures/today', async (route) => {
+    await this.page.route('**/api/fixtures/today**', async (route) => {
       await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ error: 'Internal error' }) });
     });
   }

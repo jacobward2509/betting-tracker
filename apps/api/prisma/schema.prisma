@@ -21,6 +21,14 @@ model Bet {
   stake            Decimal
   normalStake      Decimal?
   odds             Decimal
+  // Optional odds-boost percentage applied when creating/editing the bet.
+  // `odds` above always stores the final *boosted* decimal odds (so
+  // potentialReturn/profit keep being derived the same way they always
+  // have, straight from `odds`) -- this column exists purely so the
+  // Add/Edit Bet UI can redisplay the original pre-boost odds and the
+  // boost percentage itself when a previously-boosted bet is edited again.
+  // Purely additive: NULL means no boost was applied.
+  oddsBoostPercent Decimal?
   potentialReturn  Decimal
   result           BetResult @default(OPEN)
   cashOutValue     Decimal?
@@ -29,7 +37,67 @@ model Bet {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  // New structured-market fields (all optional/nullable, additive only —
+  // existing rows and the legacy fixture/selection/betType/playerPropMarket
+  // string columns above are left completely untouched so no historical bet
+  // data, for any user, is at risk when these are populated going forward).
+  marketId        Int?
+  market          Market?          @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  selectionId     Int?
+  marketSelection MarketSelection? @relation(fields: [selectionId], references: [id], onDelete: SetNull)
+  lineValue       Decimal?
+  fixtureId       String?
+  fixtureRef      Fixture?         @relation(fields: [fixtureId], references: [id], onDelete: SetNull)
+  playerId        String?
+  playerRef       Player?          @relation(fields: [playerId], references: [id], onDelete: SetNull)
+
+  // Per-leg detail for multi-leg bet types (Accumulator, Bet Builder, Cross
+  // Match Bet Builder). Purely additive — legs is empty for every other bet
+  // type and for any historical Accumulator/Bet Builder rows logged before
+  // this feature existed, so those keep displaying via the flat
+  // fixture/selection strings above exactly as they do today.
+  legs BetLeg[]
+
   @@index([userId])
+  @@index([marketId])
+  @@index([fixtureId])
+  @@index([playerId])
+}
+
+// One leg of a multi-leg bet (Accumulator / Bet Builder / Cross Match Bet
+// Builder). Always sourced from the same structured catalog used for
+// single-fixture bets (Fixture, Market, MarketSelection, MarketLine,
+// Player) — there is deliberately no manual/free-text fallback here, per
+// the plan to phase manual fixture/selection entry out entirely.
+model BetLeg {
+  id    String @id @default(uuid())
+  betId String
+  bet   Bet    @relation(fields: [betId], references: [id], onDelete: Cascade)
+  order Int    @default(0)
+
+  fixtureId  String
+  fixtureRef Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+
+  marketId        Int
+  market          Market          @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  selectionId     Int
+  marketSelection MarketSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  lineValue       Decimal?
+
+  playerId  String?
+  playerRef Player? @relation(fields: [playerId], references: [id], onDelete: SetNull)
+
+  // Generated the same way getGeneratedDescription() builds a single bet's
+  // selection string, so existing display/CSV code paths that only know how
+  // to read a flat string keep working for the per-leg breakdown too.
+  description String
+
+  createdAt DateTime @default(now())
+
+  @@index([betId])
+  @@index([fixtureId])
+  @@index([marketId])
+  @@index([playerId])
 }
 
 model User {
@@ -85,19 +153,35 @@ model Bookmakers {
 }
 
 model Fixture {
-  id              String   @id @default(uuid())
-  sportsDbEventId String   @unique
-  league          League
-  homeTeam        String
-  awayTeam        String
-  kickoffAt       DateTime
-  venue           String?
-  fetchedAt       DateTime @default(now())
-  createdAt       DateTime @default(now())
+  id                 String   @id @default(uuid())
+  sportsDbEventId    String   @unique
+  league             League
+  homeTeam           String
+  awayTeam           String
+  homeTeamSportsDbId String?
+  awayTeamSportsDbId String?
+  kickoffAt          DateTime
+  venue              String?
+  // true once this fixture's date is in the past — past-dated fixtures are
+  // cached permanently (never pruned by the daily refresh job) so
+  // retrospective bet logging keeps working; future fixtures (today..+7
+  // days) remain subject to the existing daily prune/refresh cycle.
+  isHistorical       Boolean  @default(false)
+  fetchedAt          DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  bets Bet[]
+  legs BetLeg[]
 
   @@index([kickoffAt])
 }
 
+// Legacy flat lookup tables. Superseded by Market/MarketSelection/MarketLine
+// below, but intentionally NOT dropped — existing Bet rows (for every user,
+// including historical data that must never be lost) store their betType /
+// playerPropMarket as plain strings with no FK into these tables, so keeping
+// them around costs nothing and preserves any code path that still reads
+// them for backward compatibility.
 model BetTypes {
   id       Int    @id @default(autoincrement())
   betTypes String @unique
@@ -108,14 +192,96 @@ model PlayerPropMarkets {
   markets String @unique
 }
 
+// Structured market catalog (replaces manually-curated BetTypes /
+// PlayerPropMarkets for the Add/Edit Bet UI going forward).
+model Market {
+  id             Int            @id @default(autoincrement())
+  name           String         @unique
+  category       MarketCategory
+  requiresPlayer Boolean        @default(false)
+  sortOrder      Int            @default(0)
+  createdAt      DateTime       @default(now())
+
+  selections MarketSelection[]
+  lines      MarketLine[]
+  bets       Bet[]
+  legs       BetLeg[]
+}
+
+model MarketSelection {
+  id        Int    @id @default(autoincrement())
+  marketId  Int
+  market    Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  label     String
+  sortOrder Int    @default(0)
+
+  bets Bet[]
+  legs BetLeg[]
+
+  @@unique([marketId, label])
+}
+
+model MarketLine {
+  id        Int     @id @default(autoincrement())
+  marketId  Int
+  market    Market  @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  value     Decimal
+  sortOrder Int     @default(0)
+
+  @@unique([marketId, value])
+}
+
+// Cached player roster data (per team, sourced from TheSportsDB's
+// lookup_all_players.php), refreshed alongside the fixtures cache so the Add
+// Bet player dropdown can be populated from the two teams in the selected
+// fixture without ever calling out to TheSportsDB from a request handler.
+model Player {
+  id             String   @id @default(uuid())
+  sportsDbId     String   @unique
+  teamSportsDbId String
+  teamName       String
+  name           String
+  position       String?
+  fetchedAt      DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  bets Bet[]
+  legs BetLeg[]
+
+  @@index([teamSportsDbId])
+}
+
+// Curated, industry-led list of UK-facing bookmakers (rebuilt from scratch —
+// see migration 20260903000000_rebuild_bookmaker_catalog). Every member is
+// intentionally a plain no-space identifier so no @map(...) is required
+// anywhere in this enum; apps/web/src/utils/bookmaker.ts's
+// formatBookmakerLabel() is solely responsible for inserting spaces/casing
+// for display (e.g. PaddyPower -> "Paddy Power", EightEightEightSport ->
+// "888sport").
 enum Bookmaker {
   Bet365
   Betfair
   BetUK
   Ladbrokes
-  PaddyPower  @map("Paddy Power")
+  PaddyPower
   SkyBet
-  WilliamHill @map("William Hill")
+  WilliamHill
+  Coral
+  BetVictor
+  Betfred
+  EightEightEightSport
+  Unibet
+  LiveScoreBet
+  BoyleSports
+  VirginBet
+  Betway
+  ThirtyTwoRed
+  GrosvenorSport
+  QuinnBet
+  Spreadex
+  MansionBet
+  StarSports
+  CasumoBet
 }
 
 enum StakeType {
@@ -143,4 +309,9 @@ enum League {
   CHAMPIONS_LEAGUE
   EUROPA_LEAGUE
   CONFERENCE_LEAGUE
+}
+
+enum MarketCategory {
+  MATCH
+  PLAYER
 }

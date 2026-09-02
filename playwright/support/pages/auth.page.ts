@@ -52,10 +52,58 @@ export class AuthPage {
     'Betfair',
     'BetUK',
     'Ladbrokes',
-    'Paddy Power',
+    'PaddyPower',
     'SkyBet',
-    'William Hill',
+    'WilliamHill',
+    'Coral',
+    'BetVictor',
+    'Betfred',
+    'EightEightEightSport',
+    'Unibet',
+    'LiveScoreBet',
+    'BoyleSports',
+    'VirginBet',
+    'Betway',
+    'ThirtyTwoRed',
+    'GrosvenorSport',
+    'QuinnBet',
+    'Spreadex',
+    'MansionBet',
+    'StarSports',
+    'CasumoBet',
   ] as const;
+
+  // Display labels, in the same order as EXPECTED_BOOKMAKERS, matching what
+  // apps/web/src/utils/bookmaker.ts's formatBookmakerLabel() renders for each
+  // raw enum token (e.g. "SkyBet" -> "Sky Bet", "EightEightEightSport" ->
+  // "888sport") — used for assertions against visible option/checkbox text,
+  // as opposed to the raw wire-value tokens above (used for locators/values).
+  static readonly EXPECTED_BOOKMAKER_LABELS = [
+    'Bet365',
+    'Betfair',
+    'BetUK',
+    'Ladbrokes',
+    'Paddy Power',
+    'Sky Bet',
+    'William Hill',
+    'Coral',
+    'BetVictor',
+    'Betfred',
+    '888sport',
+    'Unibet',
+    'LiveScore Bet',
+    'BoyleSports',
+    'Virgin Bet',
+    'Betway',
+    '32Red',
+    'Grosvenor Sport',
+    'QuinnBet',
+    'Spreadex',
+    'MansionBet',
+    'Star Sports',
+    'Casumo Bet',
+  ] as const;
+
 
   static readonly EXPECTED_BET_TYPES = [
     'Accumulator',

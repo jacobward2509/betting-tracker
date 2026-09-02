@@ -21,7 +21,7 @@ const oddsFormat = ref<"decimal" | "fractional">("decimal");
 const oddsFormatDraft = ref<"decimal" | "fractional">("decimal");
 const betPreferencesError = ref("");
 
-const predefinedBetTypes = ["Accumulator", "Bet Builder", "Player Prop", "Superboost", "FT Result", "Other"];
+const predefinedBetTypes = ["Accumulator", "Bet Builder", "Match", "Player Prop", "Superboost", "Other"];
 
 const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker);
 

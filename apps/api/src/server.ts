@@ -12,7 +12,13 @@ import {
   updateProfileRequestSchema,
   updateUserConfigRequestSchema,
 } from './validation';
-import { fetchFixturesForDate } from './services/thesportsdb';
+import {
+  fetchFixturesForDate,
+  fetchFixturesForDateWithStats,
+  fetchPlayersForTeam,
+  isSuspectedPlayerTruncation,
+} from './services/thesportsdb';
+
 
 // Express 4 does not automatically forward rejected promises from async route
 // handlers to error-handling middleware — this wrapper does that so unexpected
@@ -178,6 +184,177 @@ const sanitizeUniqueStrings = (items: unknown[]): string[] => {
   return values;
 };
 
+// Bet types backed by a list of BetLeg rows (each sourced exclusively from
+// the structured Fixture/Market/MarketSelection/Player catalog) rather than
+// the single fixture/market/selection fields on Bet itself.
+const MULTI_LEG_BET_TYPES = new Set(['Accumulator', 'Bet Builder', 'Cross Match Bet Builder']);
+
+type ResolvedLeg = {
+  order: number;
+  fixtureId: string;
+  marketId: number;
+  selectionId: number;
+  lineValue: number | null;
+  playerId: string | null;
+  description: string;
+  _fixture: { homeTeam: string; awayTeam: string };
+};
+
+// Builds a leg's display description the same way the Add/Edit Bet UI's
+// getGeneratedDescription() builds a single bet's selection string, so
+// existing code that only knows how to display a flat string still gets
+// something readable per leg.
+const buildLegDescription = (params: {
+  marketName: string;
+  requiresPlayer: boolean;
+  selectionLabel: string;
+  lineValue: number | null;
+  playerName: string | null;
+}): string => {
+  const line = params.lineValue !== null && params.lineValue !== undefined ? String(params.lineValue) : '';
+  const playerName = params.requiresPlayer ? params.playerName || '' : '';
+  return [playerName, params.marketName, params.selectionLabel, line].filter(Boolean).join(' ');
+};
+
+// Validates and hydrates the `legs` array sent for a multi-leg bet type,
+// enforcing the rule set agreed for each type:
+//   - Accumulator: at least 2 distinct fixtures, exactly one leg per fixture.
+//   - Bet Builder: exactly 1 fixture, at least 2 legs.
+//   - Cross Match Bet Builder: at least 2 distinct fixtures, any number of
+//     legs (>=1) per fixture.
+// Returns a validation error message, or the fully-resolved legs (each
+// carrying its generated description and the fixture it belongs to, for the
+// caller to build a top-level fixture/selection summary from).
+const resolveLegs = async (
+  betType: string,
+  rawLegs: unknown,
+): Promise<{ error?: string; legs?: ResolvedLeg[] }> => {
+  if (!MULTI_LEG_BET_TYPES.has(betType)) {
+    return { legs: [] };
+  }
+
+  const legsArray = Array.isArray(rawLegs) ? rawLegs : [];
+  if (legsArray.length === 0) {
+    return { error: `At least one leg is required for ${betType}.` };
+  }
+
+  const legInputs = legsArray.map((leg: any) => ({
+    fixtureId: leg?.fixtureId ? String(leg.fixtureId) : '',
+    marketId: leg?.marketId ? Number(leg.marketId) : NaN,
+    selectionId: leg?.selectionId ? Number(leg.selectionId) : NaN,
+    lineValue:
+      leg?.lineValue !== null && leg?.lineValue !== undefined && leg?.lineValue !== ''
+        ? Number(leg.lineValue)
+        : null,
+    playerId: leg?.playerId ? String(leg.playerId) : null,
+  }));
+
+  for (const leg of legInputs) {
+    if (!leg.fixtureId || !Number.isFinite(leg.marketId) || !Number.isFinite(leg.selectionId)) {
+      return { error: 'Each leg requires a fixture, market and selection.' };
+    }
+  }
+
+  const distinctFixtureIds = Array.from(new Set(legInputs.map((leg) => leg.fixtureId)));
+
+  if (betType === 'Accumulator') {
+    if (distinctFixtureIds.length < 2) {
+      return { error: 'An Accumulator requires at least 2 different fixtures.' };
+    }
+    if (distinctFixtureIds.length !== legInputs.length) {
+      return { error: 'An Accumulator allows only one selection per fixture.' };
+    }
+  } else if (betType === 'Bet Builder') {
+    if (distinctFixtureIds.length !== 1) {
+      return { error: 'A Bet Builder must use a single fixture for all legs.' };
+    }
+    if (legInputs.length < 2) {
+      return { error: 'A Bet Builder requires at least 2 legs.' };
+    }
+  } else if (betType === 'Cross Match Bet Builder') {
+    if (distinctFixtureIds.length < 2) {
+      return { error: 'A Cross Match Bet Builder requires at least 2 different fixtures.' };
+    }
+  }
+
+  const [fixtures, markets, players] = await Promise.all([
+    prisma.fixture.findMany({ where: { id: { in: distinctFixtureIds } } }),
+    prisma.market.findMany({
+      where: { id: { in: Array.from(new Set(legInputs.map((leg) => leg.marketId))) } },
+      include: { selections: true },
+    }),
+    prisma.player.findMany({
+      where: {
+        id: { in: legInputs.filter((leg) => leg.playerId).map((leg) => leg.playerId as string) },
+      },
+    }),
+  ]);
+
+  const fixtureById = new Map(fixtures.map((f) => [f.id, f]));
+  const marketById = new Map(markets.map((m) => [m.id, m]));
+  const playerById = new Map(players.map((p) => [p.id, p]));
+
+  const legs: ResolvedLeg[] = [];
+  for (let i = 0; i < legInputs.length; i += 1) {
+    const leg = legInputs[i];
+    const fixture = fixtureById.get(leg.fixtureId);
+    if (!fixture) return { error: 'One or more legs reference an unknown fixture.' };
+
+    const market = marketById.get(leg.marketId);
+    if (!market) return { error: 'One or more legs reference an unknown market.' };
+
+    const selection = market.selections.find((s) => s.id === leg.selectionId);
+    if (!selection) return { error: 'One or more legs reference an unknown selection for their market.' };
+
+    if (market.requiresPlayer && !leg.playerId) {
+      return { error: 'Player is required for one or more legs.' };
+    }
+    const player = leg.playerId ? playerById.get(leg.playerId) : null;
+    if (leg.playerId && !player) return { error: 'One or more legs reference an unknown player.' };
+
+    legs.push({
+      order: i,
+      fixtureId: leg.fixtureId,
+      marketId: leg.marketId,
+      selectionId: leg.selectionId,
+      lineValue: leg.lineValue,
+      playerId: leg.playerId,
+      description: buildLegDescription({
+        marketName: market.name,
+        requiresPlayer: market.requiresPlayer,
+        selectionLabel: selection.label,
+        lineValue: leg.lineValue,
+        playerName: player?.name || null,
+      }),
+      _fixture: { homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam },
+    });
+  }
+
+  return { legs };
+};
+
+// Derives the top-level (backward-compatible) fixture/selection strings for
+// a multi-leg bet from its resolved legs, so any code that only reads those
+// flat columns (CSV export/import, older reporting) still shows something
+// meaningful.
+const summarizeLegs = (betType: string, legs: ResolvedLeg[]): { fixture: string; selection: string } => {
+  if (betType === 'Bet Builder') {
+    const f = legs[0]._fixture;
+    return {
+      fixture: `${f.homeTeam} vs ${f.awayTeam}`,
+      selection: `Bet Builder: ${legs.map((leg) => leg.description).join(', ')}`,
+    };
+  }
+
+  const label = betType === 'Accumulator' ? `${legs.length}-fold Accumulator` : 'Cross Match Bet Builder';
+  return {
+    fixture: betType,
+    selection: `${label}: ${legs
+      .map((leg) => `${leg._fixture.homeTeam} vs ${leg._fixture.awayTeam} (${leg.description})`)
+      .join(', ')}`,
+  };
+};
+
 const parseFixtureTeams = (fixture: unknown): string[] => {
   const raw = String(fixture || '').trim();
   if (!raw) return [];
@@ -188,6 +365,7 @@ const parseFixtureTeams = (fixture: unknown): string[] => {
   if (parts.length < 2) return [];
   return [parts[0], parts[1]];
 };
+
 
 const parsePlayerFromSelection = (selection: unknown, market: unknown): string => {
   const text = String(selection || '')
@@ -783,6 +961,12 @@ app.get('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req,
       ],
     },
     orderBy: { placedAt: 'desc' },
+    include: {
+      legs: {
+        orderBy: { order: 'asc' },
+        include: { fixtureRef: true, market: true, marketSelection: true, playerRef: true },
+      },
+    },
   });
 
   res.json(bets);
@@ -944,10 +1128,37 @@ app.get('/api/player-suggestions', requireAuth, asyncHandler<AuthenticatedReques
 
 app.post('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const data: Record<string, unknown> = { ...req.body };
+  delete data.legs; // raw leg input array — replaced below with Prisma's nested-create shape
   data.result = normalizeResultValue(data.result);
   data.stakeType = normalizeStakeTypeValue(data.stakeType);
   data.cashOutValue = data.result === 'VOID' ? toNumberOrNull(data.cashOutValue) : null;
   data.userId = req.user?.id;
+
+  const betType = String(data.betType || '');
+  const { error: legsError, legs } = await resolveLegs(betType, (req.body as any)?.legs);
+  if (legsError) {
+    return res.status(422).json({ error: legsError });
+  }
+
+  // Structured-market fields are all optional/nullable — sanitize empty
+  // strings (sent by the Vue <select> "unselected" state) down to null so
+  // Prisma never receives an invalid FK/decimal value. For multi-leg bet
+  // types these single-fixture/market/selection fields are never used —
+  // the detail lives entirely in `legs` below — so they're forced to null.
+  const isMultiLeg = MULTI_LEG_BET_TYPES.has(betType);
+  data.marketId = !isMultiLeg && data.marketId ? Number(data.marketId) : null;
+  data.selectionId = !isMultiLeg && data.selectionId ? Number(data.selectionId) : null;
+  data.lineValue = !isMultiLeg && data.lineValue !== null && data.lineValue !== undefined && data.lineValue !== ''
+    ? toNumberOrNull(data.lineValue)
+    : null;
+  data.fixtureId = !isMultiLeg && data.fixtureId ? String(data.fixtureId) : null;
+  data.playerId = !isMultiLeg && data.playerId ? String(data.playerId) : null;
+
+  if (isMultiLeg && legs && legs.length) {
+    const summary = summarizeLegs(betType, legs);
+    data.fixture = summary.fixture;
+    data.selection = summary.selection;
+  }
 
   const stake = toNumberOrNull(data.stake);
   const normalStake = toNumberOrNull(data.normalStake);
@@ -959,6 +1170,10 @@ app.post('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req
   }
 
   data.odds = odds;
+  data.oddsBoostPercent = (() => {
+    const boost = toNumberOrNull(data.oddsBoostPercent);
+    return boost !== null && boost > 0 ? boost : null;
+  })();
   if (data.stakeType === 'NORMAL_PLUS_FREE') {
     if (stake === null || normalStake === null) {
       return res
@@ -980,9 +1195,32 @@ app.post('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req
   }
   data.profit = calculateProfit(data);
 
-  const bet = await prisma.bet.create({ data: data as any });
+  if (isMultiLeg && legs && legs.length) {
+    (data as any).legs = {
+      create: legs.map((leg) => ({
+        order: leg.order,
+        fixtureId: leg.fixtureId,
+        marketId: leg.marketId,
+        selectionId: leg.selectionId,
+        lineValue: leg.lineValue,
+        playerId: leg.playerId,
+        description: leg.description,
+      })),
+    };
+  }
+
+  const bet = await prisma.bet.create({
+    data: data as any,
+    include: {
+      legs: {
+        orderBy: { order: 'asc' },
+        include: { fixtureRef: true, market: true, marketSelection: true, playerRef: true },
+      },
+    },
+  });
   res.json(bet);
 }));
+
 
 app.put('/api/bets/:id', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const existing = await prisma.bet.findFirst({
@@ -1013,7 +1251,39 @@ app.put('/api/bets/:id', requireAuth, asyncHandler<AuthenticatedRequest>(async (
     result: normalizedResult,
     cashOutValue: normalizedCashOutValue,
   };
+  delete data.legs; // raw leg input array — replaced below with Prisma's nested-write shape
+
+  const betType = String((req.body.betType ?? existing.betType) || '');
+  const isMultiLeg = MULTI_LEG_BET_TYPES.has(betType);
+  // Legs are only re-resolved/replaced when the caller actually sends a
+  // `legs` array — omitting it (e.g. a bulk-edit that only touches
+  // result/odds) leaves any existing legs on the bet untouched.
+  const rawLegs = (req.body as any)?.legs;
+  let resolvedLegs: ResolvedLeg[] | undefined;
+  if (isMultiLeg && rawLegs !== undefined) {
+    const { error: legsError, legs } = await resolveLegs(betType, rawLegs);
+    if (legsError) {
+      return res.status(422).json({ error: legsError });
+    }
+    resolvedLegs = legs;
+  }
+
+  data.marketId = !isMultiLeg && data.marketId ? Number(data.marketId) : isMultiLeg ? null : existing.marketId;
+  data.selectionId = !isMultiLeg && data.selectionId ? Number(data.selectionId) : isMultiLeg ? null : existing.selectionId;
+  data.lineValue = !isMultiLeg && data.lineValue !== null && data.lineValue !== undefined && data.lineValue !== ''
+    ? toNumberOrNull(data.lineValue)
+    : isMultiLeg ? null : existing.lineValue;
+  data.fixtureId = !isMultiLeg && data.fixtureId ? String(data.fixtureId) : isMultiLeg ? null : existing.fixtureId;
+  data.playerId = !isMultiLeg && data.playerId ? String(data.playerId) : isMultiLeg ? null : existing.playerId;
+
+  if (isMultiLeg && resolvedLegs && resolvedLegs.length) {
+    const summary = summarizeLegs(betType, resolvedLegs);
+    data.fixture = summary.fixture;
+    data.selection = summary.selection;
+  }
+
   const stake = toNumberOrNull(merged.stake);
+
   const normalStake = toNumberOrNull(merged.normalStake);
   const odds = toOddsOrNull(merged.odds);
   if (odds === null || odds < 1) {
@@ -1023,6 +1293,10 @@ app.put('/api/bets/:id', requireAuth, asyncHandler<AuthenticatedRequest>(async (
   }
 
   data.odds = odds;
+  data.oddsBoostPercent = (() => {
+    const boost = toNumberOrNull(data.oddsBoostPercent);
+    return boost !== null && boost > 0 ? boost : null;
+  })();
   if (data.stakeType === 'NORMAL_PLUS_FREE') {
     if (stake === null || normalStake === null) {
       return res
@@ -1044,12 +1318,36 @@ app.put('/api/bets/:id', requireAuth, asyncHandler<AuthenticatedRequest>(async (
   }
   data.profit = calculateProfit(merged);
 
+  if (resolvedLegs) {
+    // Replace legs wholesale — simpler and safer than diffing individual
+    // legs, and cheap given the small (typically 2-6) leg counts involved.
+    (data as any).legs = {
+      deleteMany: {},
+      create: resolvedLegs.map((leg) => ({
+        order: leg.order,
+        fixtureId: leg.fixtureId,
+        marketId: leg.marketId,
+        selectionId: leg.selectionId,
+        lineValue: leg.lineValue,
+        playerId: leg.playerId,
+        description: leg.description,
+      })),
+    };
+  }
+
   const bet = await prisma.bet.update({
     where: { id: req.params.id },
     data: data as any,
+    include: {
+      legs: {
+        orderBy: { order: 'asc' },
+        include: { fixtureRef: true, market: true, marketSelection: true, playerRef: true },
+      },
+    },
   });
   res.json(bet);
 }));
+
 
 app.patch('/api/bets/bulk-result', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? sanitizeUniqueStrings(req.body.ids) : [];
@@ -1125,16 +1423,60 @@ app.get('/api/player-prop-markets', requireAuth, asyncHandler(async (_req, res) 
   res.json(markets);
 }));
 
+// Structured market catalog (Market/MarketSelection/MarketLine) that powers
+// the Add/Edit Bet dropdowns going forward. Supersedes /api/bet-types and
+// /api/player-prop-markets above, which are left in place unchanged for
+// backward compatibility with any historical bet data still referencing the
+// old flat string tables.
+app.get('/api/markets', requireAuth, asyncHandler(async (_req, res) => {
+  const markets = await prisma.market.findMany({
+    orderBy: { sortOrder: 'asc' },
+    include: {
+      selections: { orderBy: { sortOrder: 'asc' } },
+      lines: { orderBy: { sortOrder: 'asc' } },
+    },
+  });
+  res.json(markets);
+}));
+
+const MAX_FIXTURE_LOOKAHEAD_DAYS = 7;
+
+const toDateOnly = (date: Date): string => date.toISOString().slice(0, 10);
+
+const parseDateOnly = (value: string): Date | null => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+};
+
 // Intentionally not behind requireAuth — this powers the animated fixtures
 // banner on the logged-out Sign In / Sign Up pages, so it must be readable
 // without a session. It only ever reads from our own cached Fixture table
 // (refreshed daily by scripts/refresh-fixtures.ts / the scheduler below),
 // never calling out to TheSportsDB directly from a request handler.
-app.get('/api/fixtures/today', asyncHandler(async (_req, res) => {
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+//
+// "Today" is resolved against the caller's own local calendar day, not the
+// server's UTC clock — otherwise a viewer whose local time is far enough
+// ahead of UTC would see a fixture the server still considers "today" (by
+// UTC) even though it has already rolled over into "tomorrow" locally. The
+// optional `tzOffsetMinutes` query param mirrors JS's
+// `Date.getTimezoneOffset()` sign convention (positive = local time is
+// behind UTC, negative = ahead) and defaults to `0` (UTC) when omitted or
+// invalid, preserving existing behavior for any caller that doesn't send it.
+app.get('/api/fixtures/today', asyncHandler(async (req, res) => {
+  const rawOffset = Number(req.query.tzOffsetMinutes);
+  const tzOffsetMinutes = Number.isFinite(rawOffset) ? rawOffset : 0;
+
+  // Shift "now" into the caller's local time, truncate to that local
+  // calendar day, then shift back to UTC to get correct query boundaries.
+  const nowLocal = new Date(Date.now() - tzOffsetMinutes * 60 * 1000);
+  const startOfDayLocal = new Date(nowLocal);
+  startOfDayLocal.setUTCHours(0, 0, 0, 0);
+  const endOfDayLocal = new Date(startOfDayLocal);
+  endOfDayLocal.setUTCDate(endOfDayLocal.getUTCDate() + 1);
+
+  const startOfDay = new Date(startOfDayLocal.getTime() + tzOffsetMinutes * 60 * 1000);
+  const endOfDay = new Date(endOfDayLocal.getTime() + tzOffsetMinutes * 60 * 1000);
 
   const fixtures = await prisma.fixture.findMany({
     where: { kickoffAt: { gte: startOfDay, lt: endOfDay } },
@@ -1151,6 +1493,268 @@ app.get('/api/fixtures/today', asyncHandler(async (_req, res) => {
 
   res.json(fixtures);
 }));
+
+// Widest span (inclusive, in days) allowed between `from` and `to` when using
+// the range form of GET /api/fixtures below — bounds how many on-demand
+// TheSportsDB cache-fill calls a single request can trigger for past dates.
+const MAX_FIXTURE_RANGE_DAYS = 14;
+
+// On-demand cache fill for a single past date we've never seen before —
+// future dates are always covered by the daily refresh job, so this is the
+// only path that ever hits TheSportsDB live from a request handler, and only
+// for genuinely new historical lookups. Shared by both the single-`date` and
+// `from`/`to` range forms of GET /api/fixtures below.
+const ensurePastDateCached = async (requestedDate: Date): Promise<void> => {
+  const dateString = toDateOnly(requestedDate);
+  const fetched = await fetchFixturesForDate(dateString);
+  if (fetched.length === 0) return;
+
+  await prisma.$transaction(
+    fetched.map((fixture) =>
+      prisma.fixture.upsert({
+        where: { sportsDbEventId: fixture.sportsDbEventId },
+        create: {
+          sportsDbEventId: fixture.sportsDbEventId,
+          league: fixture.league,
+          homeTeam: fixture.homeTeam,
+          awayTeam: fixture.awayTeam,
+          homeTeamSportsDbId: fixture.homeTeamSportsDbId,
+          awayTeamSportsDbId: fixture.awayTeamSportsDbId,
+          kickoffAt: fixture.kickoffAt,
+          venue: fixture.venue,
+          isHistorical: true,
+        },
+        update: {
+          homeTeam: fixture.homeTeam,
+          awayTeam: fixture.awayTeam,
+          homeTeamSportsDbId: fixture.homeTeamSportsDbId,
+          awayTeamSportsDbId: fixture.awayTeamSportsDbId,
+          kickoffAt: fixture.kickoffAt,
+          venue: fixture.venue,
+          isHistorical: true,
+          fetchedAt: new Date(),
+        },
+      }),
+    ),
+  );
+};
+
+// Returns cached fixtures for either a single given date (`date`) or an
+// inclusive date range (`from`/`to`), used to populate the Add/Edit Bet
+// fixture dropdown(s). The range form exists because Accumulator and Cross
+// Match Bet Builder legs can be drawn from fixtures spanning several days
+// (e.g. a Saturday + Sunday fixture in the same bet) — the single-`date`
+// form remains for Match/Player Prop/Bet Builder, which only ever need one
+// day. Neither form allows requesting more than `MAX_FIXTURE_LOOKAHEAD_DAYS`
+// days into the future — Add Bet never allows logging that far ahead. Past
+// dates that have never been cached are fetched on-demand from TheSportsDB
+// (one call per tracked competition, per missing date) and cached
+// permanently, enabling retrospective logging for any past date without
+// waiting on the daily refresh job.
+app.get('/api/fixtures', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
+  const dateParam = String(req.query.date || '');
+  const fromParam = String(req.query.from || '');
+  const toParam = String(req.query.to || '');
+  const isRangeRequest = Boolean(fromParam || toParam);
+
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+  const maxFutureDate = new Date(startOfToday);
+  maxFutureDate.setUTCDate(maxFutureDate.getUTCDate() + MAX_FIXTURE_LOOKAHEAD_DAYS);
+
+  let startOfRange: Date;
+  let endOfRangeExclusive: Date;
+
+  if (isRangeRequest) {
+    const fromDate = parseDateOnly(fromParam);
+    const toDate = parseDateOnly(toParam);
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ error: 'Valid from and to query parameters (YYYY-MM-DD) are required.' });
+    }
+    if (toDate.getTime() < fromDate.getTime()) {
+      return res.status(400).json({ error: 'to must not be before from.' });
+    }
+    const spanDays = Math.round((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000));
+    if (spanDays > MAX_FIXTURE_RANGE_DAYS) {
+      return res.status(400).json({
+        error: `The from/to range cannot span more than ${MAX_FIXTURE_RANGE_DAYS} days.`,
+      });
+    }
+    if (toDate.getTime() > maxFutureDate.getTime()) {
+      return res.status(400).json({
+        error: `Bets can only be logged up to ${MAX_FIXTURE_LOOKAHEAD_DAYS} days in advance.`,
+      });
+    }
+    startOfRange = fromDate;
+    endOfRangeExclusive = new Date(toDate);
+    endOfRangeExclusive.setUTCDate(endOfRangeExclusive.getUTCDate() + 1);
+  } else {
+    const requestedDate = parseDateOnly(dateParam);
+    if (!requestedDate) {
+      return res.status(400).json({ error: 'A valid date query parameter (YYYY-MM-DD) is required.' });
+    }
+    if (requestedDate.getTime() > maxFutureDate.getTime()) {
+      return res.status(400).json({
+        error: `Bets can only be logged up to ${MAX_FIXTURE_LOOKAHEAD_DAYS} days in advance.`,
+      });
+    }
+    startOfRange = requestedDate;
+    endOfRangeExclusive = new Date(requestedDate);
+    endOfRangeExclusive.setUTCDate(endOfRangeExclusive.getUTCDate() + 1);
+  }
+
+  const fixturesQuery = () =>
+    prisma.fixture.findMany({
+      where: { kickoffAt: { gte: startOfRange, lt: endOfRangeExclusive } },
+      orderBy: { kickoffAt: 'asc' },
+    });
+
+  let fixtures = await fixturesQuery();
+
+  // On-demand cache fill for every past date within the requested span that
+  // we've never seen before — future dates are always covered by the daily
+  // refresh job. We only need to fill dates that came back with zero cached
+  // fixtures; a date with at least one cached fixture is assumed already
+  // populated (mirrors the pre-existing single-date behavior).
+  const cachedDates = new Set(fixtures.map((f) => toDateOnly(f.kickoffAt)));
+  const datesNeedingFill: Date[] = [];
+  for (
+    let cursor = new Date(startOfRange);
+    cursor.getTime() < endOfRangeExclusive.getTime();
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  ) {
+    const cursorDate = new Date(cursor);
+    if (cursorDate.getTime() >= startOfToday.getTime()) continue; // future/today handled by the daily refresh job
+    if (cachedDates.has(toDateOnly(cursorDate))) continue;
+    datesNeedingFill.push(cursorDate);
+  }
+
+  if (datesNeedingFill.length > 0) {
+    // Sequential, not Promise.all — every call goes through thesportsdb.ts's
+    // shared rate limiter (see the same note elsewhere in this file), so
+    // there's no throughput benefit to parallelizing and doing so would only
+    // risk bursting past the limiter's pacing.
+    for (const missingDate of datesNeedingFill) {
+      await ensurePastDateCached(missingDate);
+    }
+    fixtures = await fixturesQuery();
+  }
+
+  res.json(fixtures);
+}));
+
+// Returns the cached rosters for both teams in a given fixture, used to
+// populate the Add Bet player dropdown when the selected market requires a
+// player. Every time a fixture is selected, we reconcile our Player cache
+// against TheSportsDB's current rosters for both teams rather than trusting
+// whatever is already cached indefinitely -- this is what actually builds
+// up (and keeps accurate) our per-team cache over time, instead of relying
+// solely on the narrow next-7-days window the daily refresh job covers.
+//
+// Reconciliation per team:
+//   - Upsert every player TheSportsDB currently returns for the team, keyed
+//     by their globally-unique sportsDbId. If a player has moved from
+//     another team we already had them cached under, this upsert naturally
+//     re-points their teamSportsDbId/teamName to the new team.
+//   - Delete any Player row still pointing at this team that TheSportsDB no
+//     longer lists on that team's roster -- this is what removes a player
+//     from their old team once they have moved on (their row either gets
+//     recreated under the new team by that team's own upsert above/below,
+//     or simply disappears if they left a tracked team's squad entirely).
+//     Bet.playerId references SetNull on delete, so historical bets
+//     referencing a removed player are preserved, just unlinked.
+//   - If the upstream fetch for a team fails (network error, rate limit) or
+//     returns zero players, we skip both the upsert and the prune for that
+//     team and fall back to whatever is already cached -- a transient
+//     failure must never be allowed to wipe out a previously good cache.
+//   - If the fetch returns exactly the free tier's known cap size while we
+//     already have a fuller roster cached (isSuspectedPlayerTruncation),
+//     we still upsert what came back but skip the delete step -- this
+//     guards against a configured key reverting to the free tier (e.g. a
+//     Premium subscription lapsing) silently pruning a good cache down to
+//     10 players just because that's all a truncated response contained.
+app.get('/api/fixtures/:id/players', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
+  const fixture = await prisma.fixture.findUnique({ where: { id: req.params.id } });
+  if (!fixture) {
+    return res.status(404).json({ error: 'Fixture not found' });
+  }
+
+  const teamEntries: Array<{ id: string | null; name: string }> = [
+    { id: fixture.homeTeamSportsDbId, name: fixture.homeTeam },
+    { id: fixture.awayTeamSportsDbId, name: fixture.awayTeam },
+  ];
+
+  const players: Record<string, unknown>[] = [];
+  for (const team of teamEntries) {
+    if (!team.id) continue;
+
+    let cached = await prisma.player.findMany({
+      where: { teamSportsDbId: team.id },
+      orderBy: { name: 'asc' },
+    });
+
+    try {
+      const fetched = await fetchPlayersForTeam(team.id);
+      if (fetched.length > 0) {
+        const fetchedIds = fetched.map((player) => player.sportsDbId);
+        const suspectedTruncation = isSuspectedPlayerTruncation(fetched.length, cached.length);
+
+        const operations: Array<ReturnType<typeof prisma.player.upsert> | ReturnType<typeof prisma.player.deleteMany>> = [
+          ...fetched.map((player) =>
+            prisma.player.upsert({
+              where: { sportsDbId: player.sportsDbId },
+              create: {
+                sportsDbId: player.sportsDbId,
+                teamSportsDbId: player.teamSportsDbId,
+                teamName: team.name,
+                name: player.name,
+                position: player.position,
+              },
+              update: {
+                teamSportsDbId: player.teamSportsDbId,
+                teamName: team.name,
+                name: player.name,
+                position: player.position,
+                fetchedAt: new Date(),
+              },
+            }),
+          ),
+        ];
+
+        if (!suspectedTruncation) {
+          // Remove players no longer on this team's roster (retired, left the
+          // club, or moved to another team -- TheSportsDB simply won't list
+          // them here anymore). If they moved to the fixture's other team,
+          // that team's own upsert above/below re-adds them there.
+          operations.push(
+            prisma.player.deleteMany({
+              where: { teamSportsDbId: team.id, sportsDbId: { notIn: fetchedIds } },
+            }),
+          );
+        } else {
+          console.warn(
+            `Suspected truncated roster fetch for team ${team.id} (got ${fetched.length}, had ` +
+              `${cached.length} cached) -- skipping prune to avoid destroying a fuller cache.`,
+          );
+        }
+
+        await prisma.$transaction(operations);
+
+        cached = await prisma.player.findMany({
+          where: { teamSportsDbId: team.id },
+          orderBy: { name: 'asc' },
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to refresh roster for team ${team.id}:`, error);
+    }
+
+    players.push(...cached);
+  }
+
+  res.json({ homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, players });
+}));
+
 
 app.use('/api', requireAuth, bookmakersRouter);
 
@@ -1173,8 +1777,26 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 const refreshFixturesCache = async () => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const fixtures = await fetchFixturesForDate(today);
+    const today = new Date();
+    const dates = Array.from({ length: MAX_FIXTURE_LOOKAHEAD_DAYS + 1 }, (_, i) => {
+      const date = new Date(today);
+      date.setUTCDate(date.getUTCDate() + i);
+      return toDateOnly(date);
+    });
+
+    // Sequential (not Promise.all) — every call fetchFixturesForDateWithStats
+    // makes goes through thesportsdb.ts's shared rate limiter, which paces
+    // every request against TheSportsDB's global 30/minute free-tier
+    // budget. No artificial extra delay between dates is needed since the
+    // limiter already enforces the real constraint (see the same note in
+    // scripts/refresh-fixtures.ts).
+    const fixturesByDate: Array<Awaited<ReturnType<typeof fetchFixturesForDateWithStats>>> = [];
+    for (const date of dates) {
+      fixturesByDate.push(await fetchFixturesForDateWithStats(date));
+    }
+    const fixtures = fixturesByDate.flatMap((r) => r.fixtures);
+    const totalFailedLeagues = fixturesByDate.reduce((sum, r) => sum + r.failedLeagues, 0);
+    const totalLeagueCalls = fixturesByDate.reduce((sum, r) => sum + r.totalLeagues, 0);
 
     await prisma.$transaction(
       fixtures.map((fixture) =>
@@ -1185,12 +1807,17 @@ const refreshFixturesCache = async () => {
             league: fixture.league,
             homeTeam: fixture.homeTeam,
             awayTeam: fixture.awayTeam,
+            homeTeamSportsDbId: fixture.homeTeamSportsDbId,
+            awayTeamSportsDbId: fixture.awayTeamSportsDbId,
             kickoffAt: fixture.kickoffAt,
             venue: fixture.venue,
+            isHistorical: false,
           },
           update: {
             homeTeam: fixture.homeTeam,
             awayTeam: fixture.awayTeam,
+            homeTeamSportsDbId: fixture.homeTeamSportsDbId,
+            awayTeamSportsDbId: fixture.awayTeamSportsDbId,
             kickoffAt: fixture.kickoffAt,
             venue: fixture.venue,
             fetchedAt: new Date(),
@@ -1199,14 +1826,32 @@ const refreshFixturesCache = async () => {
       ),
     );
 
-    const fetchedIds = fixtures.map((fixture) => fixture.sportsDbEventId);
-    await prisma.fixture.deleteMany({ where: { sportsDbEventId: { notIn: fetchedIds } } });
+    // Pruning only ever targets the future window (isHistorical: false) —
+    // past-dated fixtures cached via the on-demand GET /api/fixtures path
+    // are permanent records and must never be deleted here. Also skip
+    // entirely if a meaningful share of this run's upstream calls failed
+    // (e.g. rate-limited), since that would otherwise wipe out a valid
+    // cache just because TheSportsDB temporarily refused requests.
+    if (totalLeagueCalls > 0 && totalFailedLeagues / totalLeagueCalls > 0.2) {
+      console.warn(
+        `Skipping fixtures prune: ${totalFailedLeagues}/${totalLeagueCalls} upstream league calls failed ` +
+          `this run (likely rate-limited).`,
+      );
+    } else {
+      const fetchedIds = fixtures.map((fixture) => fixture.sportsDbEventId);
+      await prisma.fixture.deleteMany({
+        where: { sportsDbEventId: { notIn: fetchedIds }, isHistorical: false },
+      });
+    }
 
-    console.log(`Fixtures cache refreshed: ${fixtures.length} fixtures for ${today}.`);
+    console.log(
+      `Fixtures cache refreshed: ${fixtures.length} fixtures for ${dates[0]}..${dates[dates.length - 1]}.`,
+    );
   } catch (error) {
     console.error('Failed to refresh fixtures cache:', error);
   }
 };
+
 
 const FIXTURES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 

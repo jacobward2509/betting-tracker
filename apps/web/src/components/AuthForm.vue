@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import { formatBookmakerLabel } from "@/utils/bookmaker";
 
 const props = defineProps<{ mode: "login" | "signup" }>();
 
@@ -19,20 +20,41 @@ const nameError = ref("");
 const emailError = ref("");
 const passwordError = ref("");
 const configureNow = ref(false);
+// Curated, industry-led list of UK-facing bookmakers (see the `Bookmaker`
+// enum in apps/api/prisma/schema.prisma) — every entry here is the raw,
+// no-space wire token sent to the API; formatBookmakerLabel() below is
+// solely responsible for the human-readable display label.
 const signupBookmakers = ref([
   "Bet365",
   "Betfair",
   "BetUK",
   "Ladbrokes",
-  "Paddy Power",
+  "PaddyPower",
   "SkyBet",
-  "William Hill",
+  "WilliamHill",
+  "Coral",
+  "BetVictor",
+  "Betfred",
+  "EightEightEightSport",
+  "Unibet",
+  "LiveScoreBet",
+  "BoyleSports",
+  "VirginBet",
+  "Betway",
+  "ThirtyTwoRed",
+  "GrosvenorSport",
+  "QuinnBet",
+  "Spreadex",
+  "MansionBet",
+  "StarSports",
+  "CasumoBet",
 ]);
 const enabledBookmakers = ref<string[]>([...signupBookmakers.value]);
 const defaultBookmaker = ref(signupBookmakers.value[0] || "");
 const defaultBetType = ref("Player Prop");
 const defaultStake = ref(5);
 const signupBetTypes = ["Accumulator", "Bet Builder", "Player Prop", "Superboost", "FT Result", "Other"];
+
 
 // Kept in sync with the backend's SignupRequest/LoginRequest schemas in
 // apps/api/src/validation.ts so client-side messages match what the API will
@@ -233,7 +255,7 @@ const toggleMode = () => {
                     :data-test-id="`bookmaker-checkbox-${bookmaker}`"
                     @change="toggleSignupBookmaker(bookmaker)"
                   />
-                  <span>{{ bookmaker }}</span>
+                  <span>{{ formatBookmakerLabel(bookmaker) }}</span>
                 </label>
               </div>
             </div>
@@ -247,10 +269,11 @@ const toggleMode = () => {
                   data-test-id="default-bookmaker-select"
                 >
                   <option v-for="bookmaker in enabledBookmakers" :key="bookmaker" :value="bookmaker">
-                    {{ bookmaker }}
+                    {{ formatBookmakerLabel(bookmaker) }}
                   </option>
                 </select>
               </div>
+
 
               <div>
                 <label class="block text-xs text-gray-500 dark:text-gray-400" data-test-id="default-bet-type-label">Default Bet Type</label>

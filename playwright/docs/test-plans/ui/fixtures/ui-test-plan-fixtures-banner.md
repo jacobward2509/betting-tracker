@@ -77,7 +77,8 @@ Automated by `support/pages/fixtures-banner.page.ts` (`FixturesBannerPage`), whi
 `bannerContainer` (`getByTestId('fixtures-banner')`), `fixtureRows`
 (`getByTestId('fixture-row')`), helper methods for scoping to a specific fixture's
 `fixture-league-badge` / `fixture-matchup` / `fixture-kickoff-time` locators, and mocking
-helpers (`mockFixtures()` / `mockFixturesFailure()` via `page.route('**/api/fixtures/today', ...)`)
+helpers (`mockFixtures()` / `mockFixturesFailure()` via `page.route('**/api/fixtures/today**', ...)`
+— the trailing `**` also matches the `tzOffsetMinutes` query param the component now sends)
 for the fixed fixture sets used across all five scenarios.
 
 | Scenario | Status | Spec file |

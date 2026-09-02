@@ -3,8 +3,12 @@ import Ajv, {ValidateFunction} from 'ajv'
 
 const ajv = new Ajv({allErrors: true, strict: false})
 
-// Mirrors components.schemas.League in apps/api/openapi/fixtures.yaml — the 11
-// tracked football competitions (6 domestic leagues + 5 cup competitions).
+// Mirrors components.schemas.League in apps/api/openapi/fixtures.yaml — the
+// full 11-value League enum. Only 7 of these are actively fetched/cached
+// going forward (EFL_CUP, FA_CUP, EUROPA_LEAGUE, CONFERENCE_LEAGUE were
+// excluded from active tracking — see the exclusion note on
+// LEAGUE_SPORTSDB_IDS in apps/api/src/services/thesportsdb.ts), but all 11
+// remain valid wire-format values since historical rows may still use them.
 const LEAGUE_ENUM = [
   'PREMIER_LEAGUE',
   'CHAMPIONSHIP',
@@ -18,6 +22,7 @@ const LEAGUE_ENUM = [
   'EUROPA_LEAGUE',
   'CONFERENCE_LEAGUE'
 ]
+
 
 // Mirrors components.schemas.Fixture in apps/api/openapi/fixtures.yaml —
 // returned as an array (possibly empty) by GET /api/fixtures/today. An empty

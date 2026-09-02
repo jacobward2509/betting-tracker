@@ -16,7 +16,23 @@ type BookmakerType =
   | 'Ladbrokes'
   | 'PaddyPower'
   | 'SkyBet'
-  | 'WilliamHill';
+  | 'WilliamHill'
+  | 'Coral'
+  | 'BetVictor'
+  | 'Betfred'
+  | 'EightEightEightSport'
+  | 'Unibet'
+  | 'LiveScoreBet'
+  | 'BoyleSports'
+  | 'VirginBet'
+  | 'Betway'
+  | 'ThirtyTwoRed'
+  | 'GrosvenorSport'
+  | 'QuinnBet'
+  | 'Spreadex'
+  | 'MansionBet'
+  | 'StarSports'
+  | 'CasumoBet';
 
 const REQUIRED_COLUMNS = [
   'Date',
@@ -75,7 +91,23 @@ const normalizeBookmaker = (value: string): BookmakerType | null => {
   if (v === 'LADBROKES') return 'Ladbrokes';
   if (v === 'PADDYPOWER') return 'PaddyPower';
   if (v === 'SKYBET') return 'SkyBet';
-  if (v === 'WILLIAMHILL') return 'William Hill';
+  if (v === 'WILLIAMHILL') return 'WilliamHill';
+  if (v === 'CORAL') return 'Coral';
+  if (v === 'BETVICTOR') return 'BetVictor';
+  if (v === 'BETFRED') return 'Betfred';
+  if (v === '888SPORT' || v === 'EIGHTEIGHTEIGHTSPORT') return 'EightEightEightSport';
+  if (v === 'UNIBET') return 'Unibet';
+  if (v === 'LIVESCOREBET' || v === 'LIVESCORE') return 'LiveScoreBet';
+  if (v === 'BOYLESPORTS' || v === 'BOYLESPORT') return 'BoyleSports';
+  if (v === 'VIRGINBET') return 'VirginBet';
+  if (v === 'BETWAY') return 'Betway';
+  if (v === '32RED' || v === 'THIRTYTWORED') return 'ThirtyTwoRed';
+  if (v === 'GROSVENORSPORT' || v === 'GROSVENOR') return 'GrosvenorSport';
+  if (v === 'QUINNBET') return 'QuinnBet';
+  if (v === 'SPREADEX') return 'Spreadex';
+  if (v === 'MANSIONBET') return 'MansionBet';
+  if (v === 'STARSPORTS' || v === 'STARSPORT') return 'StarSports';
+  if (v === 'CASUMOBET' || v === 'CASUMO') return 'CasumoBet';
   return null;
 };
 

@@ -90,6 +90,47 @@ test.describe('Fixtures endpoints-V2', () => {
 
         assertFixturesSchema(body);
       });
+
+      test('Resolves "today" against the caller-supplied tzOffsetMinutes rather than the server UTC clock', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        // A large positive offset (720 minutes = UTC-12, the furthest behind
+        // UTC any real timezone gets) shifts "today" back by up to 12 hours
+        // relative to the default UTC-day window used by Scenario 1. This
+        // proves the endpoint actually reads tzOffsetMinutes rather than
+        // silently ignoring it and always returning the UTC day.
+        response = await apiGet(request, URL_STUB, {noAuth: true, params: {tzOffsetMinutes: '720'}});
+        const body = await response.json();
+
+        assertFixturesSchema(body);
+        expect(Array.isArray(body), 'Response body should be an array').toBe(true);
+
+        if (body.length === 0) {
+          return;
+        }
+
+        const nowShifted = new Date(Date.now() - 720 * 60 * 1000);
+        const startOfLocalDay = new Date(nowShifted);
+        startOfLocalDay.setUTCHours(0, 0, 0, 0);
+        const endOfLocalDay = new Date(startOfLocalDay);
+        endOfLocalDay.setUTCDate(endOfLocalDay.getUTCDate() + 1);
+        const startOfDayUtc = new Date(startOfLocalDay.getTime() + 720 * 60 * 1000);
+        const endOfDayUtc = new Date(endOfLocalDay.getTime() + 720 * 60 * 1000);
+
+        for (const fixture of body) {
+          const kickoffAt = new Date(fixture.kickoffAt);
+          expect(
+            kickoffAt.getTime() >= startOfDayUtc.getTime(),
+            `Fixture ${fixture.id} kickoffAt (${fixture.kickoffAt}) should not be before the start of "today" for tzOffsetMinutes=720`,
+          ).toBe(true);
+          expect(
+            kickoffAt.getTime() < endOfDayUtc.getTime(),
+            `Fixture ${fixture.id} kickoffAt (${fixture.kickoffAt}) should be before the start of "tomorrow" for tzOffsetMinutes=720`,
+          ).toBe(true);
+        }
+      });
     });
   });
 });
