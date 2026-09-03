@@ -820,6 +820,7 @@ const columnOptions: Array<{
           <select
             id="rows-per-page-top"
             v-model.number="pageSize"
+            data-test-id="bets-rows-per-page-select"
             class="border border-gray-300 rounded-md px-2 py-1 bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
             <option :value="5">5</option>
@@ -833,17 +834,20 @@ const columnOptions: Array<{
         <div class="relative">
           <button
             @click="showColumnsMenu = !showColumnsMenu"
+            data-test-id="bets-columns-toggle-button"
             class="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 text-sm rounded-md hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
           >
             Columns
           </button>
           <div
             v-if="showColumnsMenu"
+            data-test-id="bets-columns-menu"
             class="absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-lg z-20 p-2 dark:border-gray-700 dark:bg-gray-900"
           >
             <label
               v-for="column in columnOptions"
               :key="column.key"
+              :data-test-id="`bets-columns-option-${column.key}`"
               class="flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 rounded cursor-pointer dark:text-gray-200 dark:hover:bg-gray-800"
             >
               <input
@@ -858,7 +862,7 @@ const columnOptions: Array<{
       </div>
     </div>
 
-    <div class="md:hidden space-y-3">
+    <div class="md:hidden space-y-3" data-test-id="bets-table-mobile">
       <div
         v-if="selectedCount > 0"
         class="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm dark:border-blue-900 dark:bg-blue-950/40"
@@ -905,6 +909,7 @@ const columnOptions: Array<{
       <div
         v-for="bet in paginatedBets"
         :key="`mobile-${bet.id}`"
+        data-test-id="bets-table-mobile-card"
         class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900"
       >
         <div class="mb-2 flex items-start justify-between gap-2">
@@ -1000,6 +1005,7 @@ const columnOptions: Array<{
 
     <div
       class="relative hidden md:block overflow-x-auto shadow-sm rounded-lg border border-gray-200 dark:border-gray-800"
+      data-test-id="bets-table-desktop"
     >
       <div
         v-if="selectedCount > 0"
@@ -1055,38 +1061,58 @@ const columnOptions: Array<{
                 @change="toggleSelectPage"
               />
             </th>
-            <th v-if="visibleColumns.date" class="px-6 py-3 font-medium">
-              <button @click="toggleSort('date')" class="inline-flex items-center gap-1">
+            <th v-if="visibleColumns.date" class="px-6 py-3 font-medium" data-test-id="bets-table-header-date">
+              <button
+                @click="toggleSort('date')"
+                data-test-id="bets-table-sort-button-date"
+                class="inline-flex items-center gap-1"
+              >
                 Date
-                <span class="text-xs text-gray-500">{{ getSortIndicator("date") }}</span>
+                <span class="text-xs text-gray-500" data-test-id="bets-table-sort-indicator-date">{{ getSortIndicator("date") }}</span>
               </button>
             </th>
-            <th v-if="visibleColumns.fixture" class="px-6 py-3 font-medium">Fixture</th>
-            <th v-if="visibleColumns.bookie" class="px-6 py-3 font-medium">Bookie</th>
-            <th v-if="visibleColumns.description" class="px-6 py-3 font-medium">Description</th>
-            <th v-if="visibleColumns.stakeType" class="px-6 py-3 font-medium">Stake Type</th>
-            <th v-if="visibleColumns.stake" class="px-6 py-3 font-medium">
-              <button @click="toggleSort('stake')" class="inline-flex items-center gap-1">
+            <th v-if="visibleColumns.fixture" class="px-6 py-3 font-medium" data-test-id="bets-table-header-fixture">Fixture</th>
+            <th v-if="visibleColumns.bookie" class="px-6 py-3 font-medium" data-test-id="bets-table-header-bookie">Bookie</th>
+            <th v-if="visibleColumns.description" class="px-6 py-3 font-medium" data-test-id="bets-table-header-description">Description</th>
+            <th v-if="visibleColumns.stakeType" class="px-6 py-3 font-medium" data-test-id="bets-table-header-stakeType">Stake Type</th>
+            <th v-if="visibleColumns.stake" class="px-6 py-3 font-medium" data-test-id="bets-table-header-stake">
+              <button
+                @click="toggleSort('stake')"
+                data-test-id="bets-table-sort-button-stake"
+                class="inline-flex items-center gap-1"
+              >
                 Stake (£)
-                <span class="text-xs text-gray-500">{{ getSortIndicator("stake") }}</span>
+                <span class="text-xs text-gray-500" data-test-id="bets-table-sort-indicator-stake">{{ getSortIndicator("stake") }}</span>
               </button>
             </th>
-            <th v-if="visibleColumns.odds" class="px-6 py-3 font-medium">
-              <button @click="toggleSort('odds')" class="inline-flex items-center gap-1">
+            <th v-if="visibleColumns.odds" class="px-6 py-3 font-medium" data-test-id="bets-table-header-odds">
+              <button
+                @click="toggleSort('odds')"
+                data-test-id="bets-table-sort-button-odds"
+                class="inline-flex items-center gap-1"
+              >
                 Odds
-                <span class="text-xs text-gray-500">{{ getSortIndicator("odds") }}</span>
+                <span class="text-xs text-gray-500" data-test-id="bets-table-sort-indicator-odds">{{ getSortIndicator("odds") }}</span>
               </button>
             </th>
-            <th v-if="visibleColumns.result" class="px-6 py-3 font-medium">
-              <button @click="toggleSort('result')" class="inline-flex items-center gap-1">
+            <th v-if="visibleColumns.result" class="px-6 py-3 font-medium" data-test-id="bets-table-header-result">
+              <button
+                @click="toggleSort('result')"
+                data-test-id="bets-table-sort-button-result"
+                class="inline-flex items-center gap-1"
+              >
                 Result
-                <span class="text-xs text-gray-500">{{ getSortIndicator("result") }}</span>
+                <span class="text-xs text-gray-500" data-test-id="bets-table-sort-indicator-result">{{ getSortIndicator("result") }}</span>
               </button>
             </th>
-            <th v-if="visibleColumns.profitLoss" class="px-6 py-3 font-medium">
-              <button @click="toggleSort('profit')" class="inline-flex items-center gap-1">
+            <th v-if="visibleColumns.profitLoss" class="px-6 py-3 font-medium" data-test-id="bets-table-header-profitLoss">
+              <button
+                @click="toggleSort('profit')"
+                data-test-id="bets-table-sort-button-profit"
+                class="inline-flex items-center gap-1"
+              >
                 P/L
-                <span class="text-xs text-gray-500">{{ getSortIndicator("profit") }}</span>
+                <span class="text-xs text-gray-500" data-test-id="bets-table-sort-indicator-profit">{{ getSortIndicator("profit") }}</span>
               </button>
             </th>
             <th class="px-6 py-3 font-medium">Actions</th>
@@ -1096,6 +1122,7 @@ const columnOptions: Array<{
           <tr
             v-for="bet in paginatedBets"
             :key="bet.id"
+            data-test-id="bets-table-row"
             class="odd:bg-white even:bg-gray-50 border-b border-gray-200 font-medium text-gray-900 whitespace-nowrap dark:odd:bg-gray-900 dark:even:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
           >
             <td class="px-4 py-4">
@@ -1181,11 +1208,12 @@ const columnOptions: Array<{
       </table>
     </div>
 
-    <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
+    <div class="mt-3 flex flex-wrap items-center justify-center gap-2" data-test-id="bets-pagination">
       <div class="flex items-center gap-2 text-sm">
         <button
           @click="goToFirstPage"
           :disabled="currentPage === 1"
+          data-test-id="bets-pagination-first-button"
           class="px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
         >
           &lt;&lt;
@@ -1193,16 +1221,18 @@ const columnOptions: Array<{
         <button
           @click="goToPreviousPage"
           :disabled="currentPage === 1"
+          data-test-id="bets-pagination-previous-button"
           class="px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
         >
           &lt;
         </button>
-        <span class="px-2 text-gray-700 dark:text-gray-300"
+        <span class="px-2 text-gray-700 dark:text-gray-300" data-test-id="bets-pagination-page-info"
           >Page {{ currentPage }} of {{ totalPages }}</span
         >
         <button
           @click="goToNextPage"
           :disabled="currentPage === totalPages"
+          data-test-id="bets-pagination-next-button"
           class="px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
         >
           &gt;
@@ -1210,12 +1240,14 @@ const columnOptions: Array<{
         <button
           @click="goToLastPage"
           :disabled="currentPage === totalPages"
+          data-test-id="bets-pagination-last-button"
           class="px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
         >
           &gt;&gt;
         </button>
       </div>
     </div>
+
 
     <!-- Add Bet Modal -->
     <AddBetModal v-model="showModal" :odds-format="oddsFormat" @bet-added="onBetAdded" />

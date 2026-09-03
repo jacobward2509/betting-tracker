@@ -92,34 +92,33 @@
 
 ## Automation Status
 
-Not yet automated. The existing `support/pages/bets.page.ts` (`BetsPage`) is a
-minimal page object exposing only the `addBetButton` landmark (used by
-`ui-test-plan-auth-signup.md` to confirm signup navigation) — it will need to be
-extended with locators/helpers for the summary stats bar and the `BetsTableControls`
-filter panel (all now exposed via `data-test-id` attributes added to
-`BetsView.vue`/`BetsTableControls.vue` specifically for this plan — see **Elements
-Under Test** above) before these scenarios can be automated.
+Automated by `support/pages/bets.page.ts` (`BetsPage`), extended with locators/helpers
+for the summary stats bar and the `BetsTableControls` filter panel (all exposed via
+`data-test-id` attributes added to `BetsView.vue`/`BetsTableControls.vue` specifically
+for this plan — see **Elements Under Test** above), composed by one smoke spec and one
+functional spec.
 
-Seeding/cleanup will follow the existing pattern used by
+Seeding/cleanup follows the existing pattern used by
 `tests/functional/top-banner-bet-preferences.spec.ts`: a fresh account is created via
-`signUp()` in `test.beforeEach`, bets are seeded directly via `POST /api/bets` against
-that account (a new seeding helper, to be created under `support/seed-data/bets/`,
-since none currently exists), and cleanup happens via `deleteAccount()` (`DELETE
-/api/auth/me`) in `test.afterEach` — which cascades and removes all bets owned by that
-account (`Bet.userId` has `onDelete: Cascade` to `User` in
-`apps/api/prisma/schema.prisma`). This is account-level cleanup, not the in-scope-
-adjacent per-row "Delete" button (which is out of scope for this plan regardless — see
-**Out of Scope**).
+`signUp()` in `test.beforeEach`, 3 bets are seeded via `POST /api/bets` against that
+account using the new `seedBets()` helper (`support/functions/bet-seeding.ts`) and
+`seededBetsFixture()` seed data (`support/seed-data/bets/index.ts`), and cleanup
+happens via `deleteAccount()` (`DELETE /api/auth/me`) in `test.afterEach` — which
+cascades and removes all bets owned by that account (`Bet.userId` has `onDelete:
+Cascade` to `User` in `apps/api/prisma/schema.prisma`). This is account-level cleanup,
+not the in-scope-adjacent per-row "Delete" button (which is out of scope for this plan
+regardless — see **Out of Scope**).
 
 | Scenario | Status | Spec file |
 | --- | --- | --- |
-| 1 | ❌ Not Automated | — |
-| 2 | ❌ Not Automated | — |
-| 3 | ❌ Not Automated | — |
-| 4 | ❌ Not Automated | — |
-| 5 | ❌ Not Automated | — |
-| 6 | ❌ Not Automated | — |
-| 7 | ❌ Not Automated | — |
+| 1 | ✅ Automated | `tests/smoke/bets-summary-filters.spec.ts` |
+| 2 | ✅ Automated | `tests/smoke/bets-summary-filters.spec.ts` |
+| 3 | ✅ Automated | `tests/functional/bets-filters.spec.ts` |
+| 4 | ✅ Automated | `tests/functional/bets-filters.spec.ts` |
+| 5 | ✅ Automated | `tests/functional/bets-filters.spec.ts` |
+| 6 | ✅ Automated | `tests/functional/bets-filters.spec.ts` |
+| 7 | ✅ Automated | `tests/functional/bets-filters.spec.ts` |
+
 
 
 ## References
