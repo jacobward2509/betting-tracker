@@ -376,6 +376,14 @@
             </div>
           </div>
 
+          <p
+            v-if="formError"
+            class="text-sm text-red-600"
+            data-test-id="add-bet-error"
+          >
+            {{ formError }}
+          </p>
+
           <div class="flex justify-end space-x-2 mt-4">
             <button
               type="button"
@@ -516,7 +524,8 @@ const {
   resolveFinalOdds,
   validateBetFields,
   buildBetPayload,
-  alertSubmitError,
+  formError,
+  setSubmitError,
 } = useBetForm({ oddsFormat: computed(() => props.oddsFormat) });
 
 const showAddAnotherPrompt = ref(false);
@@ -611,6 +620,7 @@ const closeModal = () => {
   pendingAddAnotherRepeat.value = false;
   show.value = false;
   emit("update:modelValue", false);
+  formError.value = "";
   resetForm();
 };
 
@@ -626,16 +636,17 @@ const handleAddAnotherChoice = (repeat: boolean) => {
 };
 
 const submitBet = async () => {
+  formError.value = "";
   try {
     const oddsResult = resolveFinalOdds();
     if ("error" in oddsResult) {
-      alert(oddsResult.error);
+      formError.value = oddsResult.error;
       return;
     }
 
     const fieldError = validateBetFields();
     if (fieldError) {
-      alert(fieldError);
+      formError.value = fieldError;
       return;
     }
 
@@ -655,7 +666,7 @@ const submitBet = async () => {
 
     closeModal();
   } catch (err: any) {
-    alertSubmitError(err, "Unknown error occurred");
+    setSubmitError(err, "Unknown error occurred");
   }
 };
 

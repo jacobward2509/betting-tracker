@@ -374,6 +374,14 @@
             </div>
           </div>
 
+          <p
+            v-if="formError"
+            class="text-sm text-red-600"
+            data-test-id="edit-bet-error"
+          >
+            {{ formError }}
+          </p>
+
           <div class="flex justify-end space-x-2 mt-4">
             <button
               type="button"
@@ -496,7 +504,8 @@ const {
   resolveFinalOdds,
   validateBetFields,
   buildBetPayload,
-  alertSubmitError,
+  formError,
+  setSubmitError,
 } = useBetForm({ oddsFormat: computed(() => props.oddsFormat) });
 
 const resultReverseMapping = RESULT_FROM_API;
@@ -638,20 +647,22 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
 const closeModal = () => {
   emit("update:modelValue", false);
   show.value = false;
+  formError.value = "";
 };
 
 const submitEdit = async () => {
   if (!props.bet?.id || isSaving.value) return;
 
+  formError.value = "";
   const oddsResult = resolveFinalOdds();
   if ("error" in oddsResult) {
-    alert(oddsResult.error);
+    formError.value = oddsResult.error;
     return;
   }
 
   const fieldError = validateBetFields();
   if (fieldError) {
-    alert(fieldError);
+    formError.value = fieldError;
     return;
   }
 
@@ -662,7 +673,7 @@ const submitEdit = async () => {
     emit("bet-updated", res.data);
     closeModal();
   } catch (err: any) {
-    alertSubmitError(err, "Failed to update bet.");
+    setSubmitError(err, "Failed to update bet.");
   } finally {
     isSaving.value = false;
   }
@@ -681,7 +692,10 @@ watch(
   () => props.modelValue,
   (val) => {
     show.value = val;
-    if (val) hydrateFromBet(props.bet);
+    if (val) {
+      formError.value = "";
+      hydrateFromBet(props.bet);
+    }
   },
 );
 

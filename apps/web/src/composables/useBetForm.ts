@@ -428,9 +428,10 @@ export const useBetForm = (options: UseBetFormOptions) => {
   // --- Odds parsing/validation, shared by both submit handlers ----------
   // Parses oddsInput/oddsNumerator/oddsDenominator (whichever the current
   // display format uses) into decimal odds, applying the odds-boost if
-  // enabled. Returns an error message to alert() on failure, or the final
-  // decimal odds ready to submit. Also writes the parsed base odds.value
-  // back so syncOddsFields() stays consistent with what was just validated.
+  // enabled. Returns an error message to surface inline (via formError) on
+  // failure, or the final decimal odds ready to submit. Also writes the
+  // parsed base odds.value back so syncOddsFields() stays consistent with
+  // what was just validated.
   const resolveFinalOdds = (): { error: string } | { finalOdds: number } => {
     const parsedOddsRaw =
       getCurrentOddsFormat() === "fractional"
@@ -556,14 +557,23 @@ export const useBetForm = (options: UseBetFormOptions) => {
     };
   };
 
-  // Standard axios error -> alert() mapping shared by both submit handlers.
-  const alertSubmitError = (err: any, fallbackMessage: string) => {
+  // Inline (non-native-dialog) form/submit error state shared by both Add
+  // Bet and Edit Bet, following the pattern established by
+  // UserMenuDisplayName.vue -- rendered inline in the template rather than
+  // via a native window.alert() dialog.
+  const formError = ref("");
+
+  // Standard axios error -> inline formError mapping shared by both submit
+  // handlers.
+  const setSubmitError = (err: any, fallbackMessage: string) => {
     if (err.response?.data?.errors) {
-      err.response.data.errors.forEach((e: any) => alert(`${e.field}: ${e.message}`));
+      formError.value = err.response.data.errors
+        .map((e: any) => `${e.field}: ${e.message}`)
+        .join(" ");
     } else if (err.code === "ERR_NETWORK") {
-      alert("Cannot reach the API. Please check if the server is running.");
+      formError.value = "Cannot reach the API. Please check if the server is running.";
     } else {
-      alert(err.message || fallbackMessage);
+      formError.value = err.message || fallbackMessage;
     }
   };
 
@@ -726,7 +736,8 @@ export const useBetForm = (options: UseBetFormOptions) => {
     resolveFinalOdds,
     validateBetFields,
     buildBetPayload,
-    alertSubmitError,
+    formError,
+    setSubmitError,
   };
 };
 
