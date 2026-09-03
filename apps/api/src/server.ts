@@ -1516,6 +1516,14 @@ app.get('/api/fixtures', requireAuth, asyncHandler<AuthenticatedRequest>(async (
     prisma.fixture.findMany({
       where: { kickoffAt: { gte: startOfRange, lt: endOfRangeExclusive } },
       orderBy: { kickoffAt: 'asc' },
+      select: {
+        id: true,
+        league: true,
+        homeTeam: true,
+        awayTeam: true,
+        kickoffAt: true,
+        venue: true,
+      },
     });
 
   let fixtures = await fixturesQuery();
