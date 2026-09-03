@@ -1,6 +1,7 @@
 import {apiGet, apiPost, deleteAccount} from '@functions/index';
-import {assertFixturesSchema} from '@schema-assertions/fixtures';
+import {assertFixturesSchema, assertPlayersForFixtureSchema} from '@schema-assertions/fixtures';
 import {maximumSignupBody} from '@seed-data/auth';
+
 
 import {APIRequestContext, APIResponse, expect, test} from '@playwright/test';
 
@@ -586,6 +587,175 @@ test.describe('Fixtures endpoints-V2', () => {
       });
     });
   });
+
+  test.describe('getPlayersForFixture', () => {
+    // No fixture data is seeded or cleaned up for this endpoint — per
+    // playwright/docs/test-plans/api/fixtures/test-plan-get-players-for-fixture.md,
+    // this is a black-box test of whatever the endpoint's cache actually
+    // contains. A real fixture id is sourced via GET /api/fixtures
+    // (today..+7 days) rather than manufactured.
+    let token: string;
+
+    test.beforeEach(async ({request}: {request: APIRequestContext}) => {
+      const signupResponse = await apiPost(request, 'api/auth/signup', {
+        data: maximumSignupBody(),
+        noAuth: true,
+      });
+      const signupBody = await signupResponse.json();
+      token = signupBody.token;
+    });
+
+    test.afterEach(async ({request}: {request: APIRequestContext}) => {
+      if (token) {
+        await deleteAccount(request, token);
+      }
+    });
+
+    test.describe('200 - Accepted', () => {
+      test('Valid request returns the fixture\'s combined roster', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const startOfToday = new Date();
+        startOfToday.setUTCHours(0, 0, 0, 0);
+        const toDate = new Date(startOfToday);
+        toDate.setUTCDate(toDate.getUTCDate() + 7);
+
+        const fixturesResponse = await apiGet(request, 'api/fixtures', {
+          headers: {Authorization: `Bearer ${token}`},
+          noAuth: true,
+          params: {from: toDateOnly(startOfToday), to: toDateOnly(toDate)},
+        });
+        expect(fixturesResponse.status(), 'Fixture lookup request should return 200').toBe(200);
+        const fixtures = await fixturesResponse.json();
+
+        // Black-box: if the environment genuinely has zero cached fixtures
+        // in the next 7 days, there is no id to test with and this suite
+        // must not manufacture one via a side channel — skip with a clear
+        // reason rather than failing or seeding data directly.
+        test.skip(
+          fixtures.length === 0,
+          'No fixtures cached in the next 7 days in this environment — skipping (black-box test, no manufactured data).',
+        );
+
+        const fixture = fixtures[0];
+
+        const response = await apiGet(request, `api/fixtures/${fixture.id}/players`, {
+          headers: {Authorization: `Bearer ${token}`},
+          noAuth: true,
+        });
+
+        expect(response.status(), 'Request should return 200').toBe(200);
+        const body = await response.json();
+        assertPlayersForFixtureSchema(body);
+
+        expect(body.homeTeam, 'homeTeam matches the fixture').toBe(fixture.homeTeam);
+        expect(body.awayTeam, 'awayTeam matches the fixture').toBe(fixture.awayTeam);
+
+        for (const player of body.players) {
+          expect(
+            player.teamName === body.homeTeam || player.teamName === body.awayTeam,
+            `Player ${player.id} teamName (${player.teamName}) should match either homeTeam (${body.homeTeam}) or awayTeam (${body.awayTeam})`,
+          ).toBe(true);
+        }
+      });
+    });
+
+    test.describe('404 - Not Found', () => {
+      let response: APIResponse;
+
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 404').toBe(404);
+        const body = await response.json();
+        expect(body.error, 'Error message is correct').toBe('Fixture not found');
+      });
+
+      test('id is a malformed, non-UUID string', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiGet(request, 'api/fixtures/not-a-valid-uuid/players', {
+          headers: {Authorization: `Bearer ${token}`},
+          noAuth: true,
+        });
+      });
+
+      test('id is a numeric string', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        response = await apiGet(request, 'api/fixtures/123456/players', {
+          headers: {Authorization: `Bearer ${token}`},
+          noAuth: true,
+        });
+      });
+
+      test('id is below the standard UUID length', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const truncatedId = '12345678';
+
+        response = await apiGet(request, `api/fixtures/${truncatedId}/players`, {
+          headers: {Authorization: `Bearer ${token}`},
+          noAuth: true,
+        });
+      });
+
+      test('id is above the standard UUID length', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const overlongId = '12345678-1234-1234-1234-123456789012-extra';
+
+        response = await apiGet(request, `api/fixtures/${overlongId}/players`, {
+          headers: {Authorization: `Bearer ${token}`},
+          noAuth: true,
+        });
+      });
+
+      test('id is a syntactically valid but non-existent UUID', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const nonExistentId = '00000000-0000-4000-8000-000000000000';
+
+        response = await apiGet(request, `api/fixtures/${nonExistentId}/players`, {
+          headers: {Authorization: `Bearer ${token}`},
+          noAuth: true,
+        });
+      });
+    });
+
+    test.describe('401 - Unauthorized', () => {
+      let response: APIResponse;
+
+      test.afterEach(async () => {
+        expect(response.status(), 'Request should return 401').toBe(401);
+        const body = await response.json();
+        expect(body.error, 'Error message is correct').toBe('Unauthorized');
+      });
+
+      test('Missing Authorization header', async ({
+        request,
+      }: {
+        request: APIRequestContext;
+      }) => {
+        const nonExistentId = '00000000-0000-4000-8000-000000000000';
+
+        response = await apiGet(request, `api/fixtures/${nonExistentId}/players`, {
+          noAuth: true,
+        });
+      });
+    });
+  });
 });
+
 
 
