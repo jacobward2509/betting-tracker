@@ -74,7 +74,7 @@
 
 - **Bets table display & column controls** (rows-per-page selector, "Columns" toggle
   menu, sortable table headers, pagination controls, responsive mobile card view) —
-  future dedicated UI test plan for `BetsView.vue`.
+  now covered by `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-table-display.md`.
 - **Row selection & bulk actions** (per-row/select-all checkboxes, bulk result-update
   bar, per-row "Edit"/"Delete" buttons, Delete confirmation modal) — future dedicated
   UI test plan for `BetsView.vue`.
