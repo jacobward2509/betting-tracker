@@ -67,14 +67,31 @@ const main = async () => {
     ),
   );
 
+  // Promote any fixture whose kickoff has already passed out of the future
+  // window to isHistorical: true *before* pruning below. Without this, a
+  // fixture created as isHistorical: false while it was still "today"
+  // would still be isHistorical: false the next run once it's fallen out
+  // of the today..+7 window TheSportsDB now returns -- and the notIn prune
+  // below would then delete it as if it no longer existed, cascading
+  // (Fixture -> Bet.fixtureId / BetLeg, both onDelete: Cascade or SetNull
+  // per schema.prisma) into wiping out any bet/leg data logged against it.
+  // Promoting first guarantees every past fixture is excluded from the
+  // isHistorical: false prune filter and therefore preserved permanently.
+  const startOfTodayUtc = new Date(`${toDateOnly(today)}T00:00:00Z`);
+  await prisma.fixture.updateMany({
+    where: { kickoffAt: { lt: startOfTodayUtc }, isHistorical: false },
+    data: { isHistorical: true },
+  });
+
   // Prune fixtures that are no longer within the future window (e.g.
   // postponed/rescheduled fixtures TheSportsDB has since removed) — but
   // never touch rows already marked historical (permanent records for
-  // retrospective bet logging), and — critically — never prune at all if a
-  // meaningful share of this run's upstream calls failed (e.g. TheSportsDB
-  // rate-limiting/429s), since "not fetched this time" would otherwise be
-  // wrongly treated as "no longer exists" and wipe out a perfectly valid
-  // cache the next time a rate limit is hit.
+  // retrospective bet logging, including any just promoted above), and —
+  // critically — never prune at all if a meaningful share of this run's
+  // upstream calls failed (e.g. TheSportsDB rate-limiting/429s), since
+  // "not fetched this time" would otherwise be wrongly treated as "no
+  // longer exists" and wipe out a perfectly valid cache the next time a
+  // rate limit is hit.
   if (totalLeagueCalls > 0 && totalFailedLeagues / totalLeagueCalls > 0.2) {
     console.warn(
       `Skipping prune: ${totalFailedLeagues}/${totalLeagueCalls} upstream league calls failed this run ` +

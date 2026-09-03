@@ -928,11 +928,16 @@ const hydrateFromBet = (bet: Record<string, any> | null) => {
     if (bet.playerId) {
       selectedPlayerId.value = String(bet.playerId);
       manualPlayerName.value = "";
-      if (bet.fixtureId) void fetchPlayersForFixture(String(bet.fixtureId));
     } else {
       selectedPlayerId.value = "";
       manualPlayerName.value = "";
     }
+    // Populate the Player dropdown's options whenever there's a fixture to
+    // fetch them for, not just when playerId happens to already be set --
+    // watch(selectedFixtureId, ...) (which normally does this) is skipped
+    // entirely during hydration (see isHydrating guard above it), so this is
+    // now the only place that triggers the fetch for a hydrated bet.
+    if (bet.fixtureId) void fetchPlayersForFixture(String(bet.fixtureId));
   } else {
     selectedMarketId.value = "";
     selectedSelectionId.value = "";
@@ -1140,7 +1145,19 @@ watch(date, (value) => {
   fetchFixturesForLegs(value);
 });
 
+// Guarded by isHydrating the same way every other reset-on-change watcher in
+// this file is (see watch(date, ...) / watch(betType, ...) below) -- without
+// it, hydrateFromBet() setting selectedFixtureId/selectedMarketId to restore
+// an existing bet's Fixture/Market selection would immediately have this
+// watcher's reset logic fire straight after and wipe out the
+// selectedPlayerId/selectedSelectionId/combinedSelectionLine values
+// hydrateFromBet had *also* just set moments earlier in the same call --
+// intermittently, since the outcome depended on watcher-queue timing versus
+// the isHydrating flag's own nextTick() reset. That's what caused Player and
+// Selection to sometimes come back blank on Edit even though the bet's data
+// was fully intact.
 watch(selectedFixtureId, (value) => {
+  if (isHydrating.value) return;
   selectedPlayerId.value = "";
   manualPlayerName.value = "";
   if (value && value !== "__manual__") {
@@ -1153,6 +1170,7 @@ watch(selectedFixtureId, (value) => {
 });
 
 watch(selectedMarketId, () => {
+  if (isHydrating.value) return;
   selectedLineValue.value = "";
   selectedPlayerId.value = "";
   manualPlayerName.value = "";

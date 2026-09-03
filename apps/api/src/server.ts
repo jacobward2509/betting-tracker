@@ -1643,15 +1643,89 @@ app.get('/api/fixtures', requireAuth, asyncHandler<AuthenticatedRequest>(async (
   res.json(fixtures);
 }));
 
+// Reconciles a single team's Player cache against a fresh live TheSportsDB
+// fetch, run in the background (fire-and-forget) after GET
+// /api/fixtures/:id/players has already responded with the cache as-is --
+// see the route below for why this is deliberately non-blocking. `cached`
+// is the pre-fetch snapshot for this team, used both as the fallback on
+// error and to detect a suspected truncated response.
+const reconcilePlayersForTeamInBackground = async (
+  teamId: string,
+  teamName: string,
+  cached: Awaited<ReturnType<typeof prisma.player.findMany>>,
+): Promise<void> => {
+  try {
+    const fetched = await fetchPlayersForTeam(teamId);
+    if (fetched.length === 0) return;
+
+    const fetchedIds = fetched.map((player) => player.sportsDbId);
+    const suspectedTruncation = isSuspectedPlayerTruncation(fetched.length, cached.length);
+
+    const operations: Array<ReturnType<typeof prisma.player.upsert> | ReturnType<typeof prisma.player.deleteMany>> = [
+      ...fetched.map((player) =>
+        prisma.player.upsert({
+          where: { sportsDbId: player.sportsDbId },
+          create: {
+            sportsDbId: player.sportsDbId,
+            teamSportsDbId: player.teamSportsDbId,
+            teamName,
+            name: player.name,
+            position: player.position,
+          },
+          update: {
+            teamSportsDbId: player.teamSportsDbId,
+            teamName,
+            name: player.name,
+            position: player.position,
+            fetchedAt: new Date(),
+          },
+        }),
+      ),
+    ];
+
+    if (!suspectedTruncation) {
+      // Remove players no longer on this team's roster (retired, left the
+      // club, or moved to another team -- TheSportsDB simply won't list
+      // them here anymore). If they moved to the fixture's other team,
+      // that team's own upsert re-adds them there.
+      operations.push(
+        prisma.player.deleteMany({
+          where: { teamSportsDbId: teamId, sportsDbId: { notIn: fetchedIds } },
+        }),
+      );
+    } else {
+      console.warn(
+        `Suspected truncated roster fetch for team ${teamId} (got ${fetched.length}, had ` +
+          `${cached.length} cached) -- skipping prune to avoid destroying a fuller cache.`,
+      );
+    }
+
+    await prisma.$transaction(operations);
+  } catch (error) {
+    console.error(`Failed to refresh roster for team ${teamId}:`, error);
+  }
+};
+
+// How long a team's cached roster is trusted before the on-demand
+// reconciliation below bothers making a live TheSportsDB call for it again.
+// Rosters rarely change intra-day, so skipping the live call entirely for a
+// still-fresh cache avoids paying its cost (a rate-limited round trip per
+// team, ~2-5s combined for both teams) on every single Edit/Add Bet fixture
+// selection -- the common case once a team has been fetched at all.
+const PLAYER_CACHE_FRESHNESS_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 // Returns the cached rosters for both teams in a given fixture, used to
 // populate the Add Bet player dropdown when the selected market requires a
-// player. Every time a fixture is selected, we reconcile our Player cache
-// against TheSportsDB's current rosters for both teams rather than trusting
-// whatever is already cached indefinitely -- this is what actually builds
-// up (and keeps accurate) our per-team cache over time, instead of relying
-// solely on the narrow next-7-days window the daily refresh job covers.
+// player. Responds with whatever is already cached immediately -- the
+// cached rows are already accurate enough to display -- rather than making
+// the caller wait on a live TheSportsDB reconciliation call before
+// responding. Reconciliation against TheSportsDB's current rosters for
+// both teams still happens (unless the cache is fresh enough to skip, see
+// PLAYER_CACHE_FRESHNESS_MS above), but fires in the background after the
+// response has already been sent, so it can keep building up/correcting
+// the cache over time without blocking the UI on every fixture selection.
 //
-// Reconciliation per team:
+// Reconciliation per team (whenever the cache isn't fresh enough to skip it):
 //   - Upsert every player TheSportsDB currently returns for the team, keyed
 //     by their globally-unique sportsDbId. If a player has moved from
 //     another team we already had them cached under, this upsert naturally
@@ -1684,75 +1758,33 @@ app.get('/api/fixtures/:id/players', requireAuth, asyncHandler<AuthenticatedRequ
     { id: fixture.awayTeamSportsDbId, name: fixture.awayTeam },
   ];
 
-  const players: Record<string, unknown>[] = [];
+  const cachedByTeam = new Map<string, Awaited<ReturnType<typeof prisma.player.findMany>>>();
   for (const team of teamEntries) {
     if (!team.id) continue;
-
-    let cached = await prisma.player.findMany({
+    const cached = await prisma.player.findMany({
       where: { teamSportsDbId: team.id },
       orderBy: { name: 'asc' },
     });
-
-    try {
-      const fetched = await fetchPlayersForTeam(team.id);
-      if (fetched.length > 0) {
-        const fetchedIds = fetched.map((player) => player.sportsDbId);
-        const suspectedTruncation = isSuspectedPlayerTruncation(fetched.length, cached.length);
-
-        const operations: Array<ReturnType<typeof prisma.player.upsert> | ReturnType<typeof prisma.player.deleteMany>> = [
-          ...fetched.map((player) =>
-            prisma.player.upsert({
-              where: { sportsDbId: player.sportsDbId },
-              create: {
-                sportsDbId: player.sportsDbId,
-                teamSportsDbId: player.teamSportsDbId,
-                teamName: team.name,
-                name: player.name,
-                position: player.position,
-              },
-              update: {
-                teamSportsDbId: player.teamSportsDbId,
-                teamName: team.name,
-                name: player.name,
-                position: player.position,
-                fetchedAt: new Date(),
-              },
-            }),
-          ),
-        ];
-
-        if (!suspectedTruncation) {
-          // Remove players no longer on this team's roster (retired, left the
-          // club, or moved to another team -- TheSportsDB simply won't list
-          // them here anymore). If they moved to the fixture's other team,
-          // that team's own upsert above/below re-adds them there.
-          operations.push(
-            prisma.player.deleteMany({
-              where: { teamSportsDbId: team.id, sportsDbId: { notIn: fetchedIds } },
-            }),
-          );
-        } else {
-          console.warn(
-            `Suspected truncated roster fetch for team ${team.id} (got ${fetched.length}, had ` +
-              `${cached.length} cached) -- skipping prune to avoid destroying a fuller cache.`,
-          );
-        }
-
-        await prisma.$transaction(operations);
-
-        cached = await prisma.player.findMany({
-          where: { teamSportsDbId: team.id },
-          orderBy: { name: 'asc' },
-        });
-      }
-    } catch (error) {
-      console.error(`Failed to refresh roster for team ${team.id}:`, error);
-    }
-
-    players.push(...cached);
+    cachedByTeam.set(team.id, cached);
   }
 
+  const players = teamEntries.flatMap((team) => (team.id ? cachedByTeam.get(team.id) || [] : []));
   res.json({ homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, players });
+
+  // Everything below runs after the response has already been sent -- any
+  // error here must never surface to the caller (there's no response left
+  // to send it on), so this is deliberately fire-and-forget with its own
+  // catch per team.
+  for (const team of teamEntries) {
+    if (!team.id) continue;
+    const cached = cachedByTeam.get(team.id) || [];
+    const cacheFreshEnoughToSkip =
+      cached.length > 0 &&
+      cached.every((player) => Date.now() - player.fetchedAt.getTime() < PLAYER_CACHE_FRESHNESS_MS);
+    if (cacheFreshEnoughToSkip) continue;
+
+    void reconcilePlayersForTeamInBackground(team.id, team.name, cached);
+  }
 }));
 
 
@@ -1826,12 +1858,31 @@ const refreshFixturesCache = async () => {
       ),
     );
 
+    // Promote any fixture whose kickoff has already passed out of the
+    // future window to isHistorical: true *before* pruning below. Without
+    // this, a fixture created as isHistorical: false while it was still
+    // "today" would still be isHistorical: false the next day once it's
+    // fallen out of the today..+7 window TheSportsDB now returns for this
+    // refresh -- and the notIn prune below would then delete it as if it
+    // no longer existed, cascading (Fixture -> Bet.fixtureId / BetLeg,
+    // both onDelete: Cascade or SetNull per schema.prisma) into wiping out
+    // any bet/leg data logged against it. Promoting first guarantees every
+    // past fixture is excluded from the isHistorical: false prune filter
+    // and therefore preserved permanently, matching the "past-dated
+    // fixtures are permanent records" contract described below.
+    const startOfTodayUtc = new Date(`${toDateOnly(today)}T00:00:00Z`);
+    await prisma.fixture.updateMany({
+      where: { kickoffAt: { lt: startOfTodayUtc }, isHistorical: false },
+      data: { isHistorical: true },
+    });
+
     // Pruning only ever targets the future window (isHistorical: false) —
     // past-dated fixtures cached via the on-demand GET /api/fixtures path
-    // are permanent records and must never be deleted here. Also skip
-    // entirely if a meaningful share of this run's upstream calls failed
-    // (e.g. rate-limited), since that would otherwise wipe out a valid
-    // cache just because TheSportsDB temporarily refused requests.
+    // (or just promoted above) are permanent records and must never be
+    // deleted here. Also skip entirely if a meaningful share of this run's
+    // upstream calls failed (e.g. rate-limited), since that would
+    // otherwise wipe out a valid cache just because TheSportsDB
+    // temporarily refused requests.
     if (totalLeagueCalls > 0 && totalFailedLeagues / totalLeagueCalls > 0.2) {
       console.warn(
         `Skipping fixtures prune: ${totalFailedLeagues}/${totalLeagueCalls} upstream league calls failed ` +
