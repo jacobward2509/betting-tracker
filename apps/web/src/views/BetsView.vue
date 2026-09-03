@@ -6,11 +6,13 @@ import BetsTableControls from "@/components/BetsTableControls.vue";
 import { formatOddsForDisplay, type OddsFormat } from "@/utils/odds";
 import { formatBookmakerLabel } from "@/utils/bookmaker";
 import { getCondensedSelection } from "@/utils/betSelection";
+import { getResultLabel, getStakeTypeLabel } from "@/utils/betEnums";
 
 import {
   SELECTED_SEASON_STORAGE_KEY,
   getCurrentSeasonKey,
   getSeasonKeyFromDate,
+  getSeasonKeyFromLabel,
   getSeasonLabel,
 } from "@/utils/season";
 import api from "@/lib/api";
@@ -237,16 +239,6 @@ const seasonOptions = computed(() => {
     .map((key) => getSeasonLabel(key));
 });
 
-const getSeasonKeyFromLabel = (label: string) => {
-  const trimmed = String(label || "").trim();
-  const keyMatch = trimmed.match(/^(\d{4})-(\d{4})$/);
-  if (keyMatch) return `${keyMatch[1]}-${keyMatch[2]}`;
-  const match = trimmed.match(/^(\d{4})\s*\/\s*(\d{2})$/);
-  if (!match) return "";
-  const startYear = Number(match[1]);
-  return `${startYear}-${startYear + 1}`;
-};
-
 const openDeleteModal = (bet: Record<string, any>) => {
   deletingBet.value = bet;
   showDeleteModal.value = true;
@@ -275,40 +267,12 @@ const confirmDelete = async () => {
   }
 };
 
-const normalizeResult = (result: string) =>
-  String(result || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "_");
-
-const getResultLabel = (result: string) => {
-  const normalized = normalizeResult(result);
-  if (normalized === "WON" || normalized === "WIN") return "Win";
-  if (normalized === "LOST" || normalized === "LOSS") return "Loss";
-  if (normalized === "CASHED_OUT" || normalized === "CASHEDOUT" || normalized === "VOID")
-    return "Cashed Out";
-  return "Open";
-};
-
 const getResultClasses = (result: string) => {
   const label = getResultLabel(result);
   if (label === "Win") return "bg-green-100 text-green-800";
   if (label === "Loss") return "bg-red-100 text-red-800";
   if (label === "Cashed Out") return "bg-yellow-100 text-yellow-800";
   return "bg-gray-100 text-gray-700";
-};
-
-const normalizeStakeType = (stakeType: string) =>
-  String(stakeType || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "_");
-
-const getStakeTypeLabel = (stakeType: string) => {
-  const normalized = normalizeStakeType(stakeType);
-  if (normalized === "FREE") return "Free";
-  if (normalized === "NORMAL_PLUS_FREE") return "Normal + Free";
-  return "Normal";
 };
 
 const getStakeTypeClasses = (stakeType: string) => {

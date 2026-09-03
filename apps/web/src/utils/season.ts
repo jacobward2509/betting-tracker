@@ -17,3 +17,19 @@ export const getSeasonLabel = (seasonKey: string): string => {
   if (!start || !end) return seasonKey;
   return `${start}/${String(end).slice(-2)}`;
 };
+
+// Inverse of getSeasonLabel — recovers a "YYYY-YYYY" season key from either
+// that same key (passed through unchanged) or a display label like
+// "2025/26". Used to compare a persisted/selected season label against
+// bets' own season keys (derived via getSeasonKeyFromDate) when filtering.
+// Returns "" for anything that doesn't look like either shape.
+export const getSeasonKeyFromLabel = (label: string): string => {
+  const trimmed = String(label || "").trim();
+  const keyMatch = trimmed.match(/^(\d{4})-(\d{4})$/);
+  if (keyMatch) return `${keyMatch[1]}-${keyMatch[2]}`;
+  const labelMatch = trimmed.match(/^(\d{4})\s*\/\s*(\d{2})$/);
+  if (!labelMatch) return "";
+  const startYear = Number(labelMatch[1]);
+  return `${startYear}-${startYear + 1}`;
+};
+

@@ -6,6 +6,7 @@ import {
   SELECTED_SEASON_STORAGE_KEY,
   getCurrentSeasonKey,
   getSeasonKeyFromDate,
+  getSeasonKeyFromLabel,
   getSeasonLabel,
 } from "@/utils/season";
 
@@ -18,15 +19,6 @@ const selectedSeason = ref(getSeasonLabel(getCurrentSeasonKey()));
 const isDailyExpanded = ref(false);
 const DAILY_PREVIEW_ROWS = 10;
 
-const getSeasonKeyFromLabel = (label: string) => {
-  const trimmed = String(label || "").trim();
-  const keyMatch = trimmed.match(/^(\d{4})-(\d{4})$/);
-  if (keyMatch) return `${keyMatch[1]}-${keyMatch[2]}`;
-  const labelMatch = trimmed.match(/^(\d{4})\s*\/\s*(\d{2})$/);
-  if (!labelMatch) return "";
-  const startYear = Number(labelMatch[1]);
-  return `${startYear}-${startYear + 1}`;
-};
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value);
