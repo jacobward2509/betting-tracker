@@ -23,7 +23,7 @@ test.describe('Bets Table Display', () => {
     const email = randomSignupEmail();
     token = await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
     if (token) await seedBets(request, token, seededPaginatedBetsFixture());
-    await page.goto('/bets');
+    await BetsPage.expectBetsLoaded(page, () => page.goto('/bets'));
   });
 
   test.afterEach(async ({ request }) => {
@@ -42,7 +42,7 @@ test.describe('Bets Table Display', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.reload();
+    await BetsPage.expectBetsLoaded(page, () => page.reload());
 
     const betsPage = new BetsPage(page);
     await betsPage.expectMobileCardViewCosmeticElements(10);

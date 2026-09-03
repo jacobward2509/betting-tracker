@@ -67,3 +67,4 @@ This workflow lets the user run an **already-generated** Playwright spec file (f
 - Do not skip summarization — always run `summarize-test-results.js` and present its actual output, even if everything passed.
 - This workflow only applies to V2 (Playwright). It has no equivalent for V1/Postman collections, since there's no run/repair loop for those.
 - If `.ai/api-workflow-state.json` already shows `stage: "repair"` for this same `specFile`/`scope` with unresolved `failures`, resume per `self-heal.md`'s **"Resuming from state"** section instead of re-running from scratch — don't re-ask the environment/scope questions above.
+- Steps 1–3 (spec file, scope, environment) must all be explicitly answered by the user in the current conversation before step 5 executes anything — never infer or reuse answers from a previous, unrelated run.

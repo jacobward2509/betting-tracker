@@ -35,4 +35,4 @@ Once the Playwright test code has been generated and saved into the spec file:
 
 - Update `.ai/api-workflow-state.json`: append `"generate"` to `completed`, set `stage: "run"`, and record `specFile` (the spec file path used).
 
-Then proceed to **`run-and-validate.md`**.
+Then proceed to **`run-and-validate.md`** — this means asking the "Would you like to run the newly created tests now?" question next, NOT running any test command. Generating/writing spec file code is never itself permission to execute it. Do not run `npx playwright test` (or any other test-execution command) until the user has explicitly answered that question with "Yes" in this conversation, and has answered the environment + scope follow-up questions too.

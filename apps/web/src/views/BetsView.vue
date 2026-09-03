@@ -86,6 +86,9 @@ const bulkCashOutValue = ref<number | null>(null);
 const editingBet = ref<Record<string, any> | null>(null);
 const deletingBet = ref<Record<string, any> | null>(null);
 const isDeleting = ref(false);
+const fetchBetsError = ref("");
+const deleteError = ref("");
+const bulkActionError = ref("");
 const visibleColumns = ref({
   date: true,
   fixture: true,
@@ -181,6 +184,7 @@ currentPage.value = savedTableState.currentPage;
 // Fetch bets
 const fetchBets = async () => {
   try {
+    fetchBetsError.value = "";
     const res = await api.get("/api/bets");
     bets.value = res.data || [];
     const existingIds = new Set(
@@ -193,7 +197,7 @@ const fetchBets = async () => {
       window.location.href = "/sign-in";
       return;
     }
-    alert("Failed to fetch bets. Is the API running?");
+    fetchBetsError.value = "Failed to fetch bets. Is the API running?";
   }
 };
 
@@ -242,11 +246,13 @@ const seasonOptions = computed(() => {
 const openDeleteModal = (bet: Record<string, any>) => {
   deletingBet.value = bet;
   showDeleteModal.value = true;
+  deleteError.value = "";
 };
 
 const closeDeleteModal = () => {
   showDeleteModal.value = false;
   deletingBet.value = null;
+  deleteError.value = "";
 };
 
 const confirmDelete = async () => {
@@ -254,6 +260,7 @@ const confirmDelete = async () => {
 
   try {
     isDeleting.value = true;
+    deleteError.value = "";
     await api.delete(`/api/bets/${deletingBet.value.id}`);
     await fetchBets();
     if (authStore.user?.id) {
@@ -261,7 +268,7 @@ const confirmDelete = async () => {
     }
     closeDeleteModal();
   } catch {
-    alert("Failed to delete bet. Please try again.");
+    deleteError.value = "Failed to delete bet. Please try again.";
   } finally {
     isDeleting.value = false;
   }
@@ -619,6 +626,7 @@ const toggleSelectPage = () => {
 
 const clearBulkSelection = () => {
   selectedBetIds.value = [];
+  bulkActionError.value = "";
 };
 
 const resultLabelToApi: Record<string, string> = {
@@ -630,11 +638,12 @@ const resultLabelToApi: Record<string, string> = {
 
 const applyBulkResult = async () => {
   if (!selectedBetIds.value.length || isApplyingBulkResult.value) return;
+  bulkActionError.value = "";
   if (
     bulkResult.value === "Cashed Out" &&
     (bulkCashOutValue.value == null || bulkCashOutValue.value < 0)
   ) {
-    alert("Please enter a valid Cash Out value for Cashed Out.");
+    bulkActionError.value = "Please enter a valid Cash Out value for Cashed Out.";
     return;
   }
 
@@ -648,7 +657,7 @@ const applyBulkResult = async () => {
     await fetchBets();
     clearBulkSelection();
   } catch (error: any) {
-    alert(error?.response?.data?.error || "Failed to apply bulk result.");
+    bulkActionError.value = error?.response?.data?.error || "Failed to apply bulk result.";
   } finally {
     isApplyingBulkResult.value = false;
   }
@@ -678,6 +687,15 @@ watch(bulkResult, (value) => {
   if (value !== "Cashed Out") {
     bulkCashOutValue.value = null;
   }
+  bulkActionError.value = "";
+});
+
+watch(bulkCashOutValue, () => {
+  bulkActionError.value = "";
+});
+
+watch(selectedBetIds, () => {
+  bulkActionError.value = "";
 });
 
 watch(
@@ -804,6 +822,14 @@ const columnOptions: Array<{
       @update:filters="onFiltersUpdate"
     />
 
+    <p
+      v-if="fetchBetsError"
+      data-test-id="bets-fetch-error"
+      class="mb-2 text-sm text-red-600"
+    >
+      {{ fetchBetsError }}
+    </p>
+
     <!-- Bets table with updated styling -->
     <div class="mb-2 flex items-center justify-between gap-2">
       <button
@@ -865,9 +891,10 @@ const columnOptions: Array<{
     <div class="md:hidden space-y-3" data-test-id="bets-table-mobile">
       <div
         v-if="selectedCount > 0"
+        data-test-id="bets-bulk-bar-mobile"
         class="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm dark:border-blue-900 dark:bg-blue-950/40"
       >
-        <span class="font-medium text-blue-800 dark:text-blue-200">
+        <span class="font-medium text-blue-800 dark:text-blue-200" data-test-id="bets-bulk-selected-count-mobile">
           {{ selectedCount }} selected
         </span>
         <span class="text-xs text-blue-700 dark:text-blue-300">
@@ -875,6 +902,7 @@ const columnOptions: Array<{
         </span>
         <select
           v-model="bulkResult"
+          data-test-id="bets-bulk-result-select-mobile"
           class="rounded border border-blue-200 bg-white px-2 py-1 text-sm dark:border-blue-800 dark:bg-gray-900 dark:text-gray-100"
         >
           <option>Open</option>
@@ -889,21 +917,31 @@ const columnOptions: Array<{
           min="0"
           step="0.01"
           placeholder="Cash Out Value"
+          data-test-id="bets-bulk-cash-out-input-mobile"
           class="w-36 rounded border border-blue-200 bg-white px-2 py-1 text-sm dark:border-blue-800 dark:bg-gray-900 dark:text-gray-100"
         />
         <button
           @click="applyBulkResult"
           :disabled="isApplyingBulkResult"
+          data-test-id="bets-bulk-apply-button-mobile"
           class="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
         >
           {{ isApplyingBulkResult ? "Applying..." : "Apply" }}
         </button>
         <button
           @click="clearBulkSelection"
+          data-test-id="bets-bulk-clear-button-mobile"
           class="bg-red-600 hover:bg-red-700 text-white border border-gray-300 px-3 py-1 text-xs font-semibold rounded-md dark:border-gray-700"
         >
           Clear
         </button>
+        <p
+          v-if="bulkActionError"
+          data-test-id="bets-bulk-error-mobile"
+          class="w-full text-xs text-red-600"
+        >
+          {{ bulkActionError }}
+        </p>
       </div>
 
       <div
@@ -923,6 +961,7 @@ const columnOptions: Array<{
           </div>
           <input
             type="checkbox"
+            data-test-id="bets-table-mobile-card-checkbox"
             :checked="isBetSelected(String(bet.id))"
             class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             @change="toggleBetSelection(String(bet.id))"
@@ -989,12 +1028,14 @@ const columnOptions: Array<{
         <div class="mt-3 flex items-center gap-2">
           <button
             @click="openEditModal(bet)"
+            data-test-id="bets-table-mobile-card-edit-button"
             class="px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
           >
             Edit
           </button>
           <button
             @click="openDeleteModal(bet)"
+            data-test-id="bets-table-mobile-card-delete-button"
             class="px-3 py-1.5 text-xs font-semibold rounded-md bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
           >
             Delete
@@ -1009,9 +1050,10 @@ const columnOptions: Array<{
     >
       <div
         v-if="selectedCount > 0"
+        data-test-id="bets-bulk-bar-desktop"
         class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-blue-200 bg-blue-50 px-3 py-2 text-sm dark:border-blue-900 dark:bg-blue-950/40"
       >
-        <span class="font-medium text-blue-800 dark:text-blue-200">
+        <span class="font-medium text-blue-800 dark:text-blue-200" data-test-id="bets-bulk-selected-count-desktop">
           {{ selectedCount }} selected
         </span>
         <span class="text-xs text-blue-700 dark:text-blue-300">
@@ -1019,6 +1061,7 @@ const columnOptions: Array<{
         </span>
         <select
           v-model="bulkResult"
+          data-test-id="bets-bulk-result-select-desktop"
           class="rounded border border-blue-200 bg-white px-2 py-1 text-sm dark:border-blue-800 dark:bg-gray-900 dark:text-gray-100"
         >
           <option>Open</option>
@@ -1033,28 +1076,39 @@ const columnOptions: Array<{
           min="0"
           step="0.01"
           placeholder="Cash Out Value"
+          data-test-id="bets-bulk-cash-out-input-desktop"
           class="w-36 rounded border border-blue-200 bg-white px-2 py-1 text-sm dark:border-blue-800 dark:bg-gray-900 dark:text-gray-100"
         />
         <button
           @click="applyBulkResult"
           :disabled="isApplyingBulkResult"
+          data-test-id="bets-bulk-apply-button-desktop"
           class="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
         >
           {{ isApplyingBulkResult ? "Applying..." : "Apply" }}
         </button>
         <button
           @click="clearBulkSelection"
+          data-test-id="bets-bulk-clear-button-desktop"
           class="bg-red-600 hover:bg-red-700 text-white border border-gray-300 px-3 py-1 text-xs font-semibold rounded-md dark:border-gray-700"
         >
           Clear
         </button>
+        <p
+          v-if="bulkActionError"
+          data-test-id="bets-bulk-error-desktop"
+          class="w-full text-xs text-red-600"
+        >
+          {{ bulkActionError }}
+        </p>
       </div>
       <table class="w-full text-sm text-center text-gray-700 dark:text-gray-200">
         <thead class="bg-gray-100 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
           <tr>
-            <th class="px-4 py-3 font-medium">
+            <th class="px-4 py-3 font-medium" data-test-id="bets-table-header-select-all">
               <input
                 type="checkbox"
+                data-test-id="bets-table-select-all-checkbox"
                 :checked="allPageSelected"
                 :indeterminate.prop="somePageSelected && !allPageSelected"
                 class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1115,7 +1169,7 @@ const columnOptions: Array<{
                 <span class="text-xs text-gray-500" data-test-id="bets-table-sort-indicator-profit">{{ getSortIndicator("profit") }}</span>
               </button>
             </th>
-            <th class="px-6 py-3 font-medium">Actions</th>
+            <th class="px-6 py-3 font-medium" data-test-id="bets-table-header-actions">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -1128,6 +1182,7 @@ const columnOptions: Array<{
             <td class="px-4 py-4">
               <input
                 type="checkbox"
+                data-test-id="bets-table-row-checkbox"
                 :checked="isBetSelected(String(bet.id))"
                 class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 @change="toggleBetSelection(String(bet.id))"
@@ -1192,12 +1247,14 @@ const columnOptions: Array<{
             <td class="px-6 py-4">
               <button
                 @click="openEditModal(bet)"
+                data-test-id="bets-table-row-edit-button"
                 class="mr-2 px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
               >
                 Edit
               </button>
               <button
                 @click="openDeleteModal(bet)"
+                data-test-id="bets-table-row-delete-button"
                 class="px-3 py-1.5 text-xs font-semibold rounded-md bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
               >
                 Delete
@@ -1261,6 +1318,7 @@ const columnOptions: Array<{
     <!-- Delete Confirmation Modal -->
     <div
       v-if="showDeleteModal && deletingBet"
+      data-test-id="bets-delete-modal"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
     >
       <div
@@ -1270,6 +1328,7 @@ const columnOptions: Array<{
           <h3 class="text-lg font-medium text-gray-800 dark:text-gray-100">Delete Bet</h3>
           <button
             @click="closeDeleteModal"
+            data-test-id="bets-delete-modal-close-button"
             class="text-gray-500 hover:text-gray-700 text-xl dark:text-gray-400 dark:hover:text-gray-200"
           >
             &times;
@@ -1283,14 +1342,23 @@ const columnOptions: Array<{
           <div
             class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
           >
-            <p><span class="font-semibold">Fixture:</span> {{ deletingBet.fixture }}</p>
-            <p><span class="font-semibold">Description:</span> {{ deletingBet.selection }}</p>
+            <p data-test-id="bets-delete-modal-fixture"><span class="font-semibold">Fixture:</span> {{ deletingBet.fixture }}</p>
+            <p data-test-id="bets-delete-modal-description"><span class="font-semibold">Description:</span> {{ deletingBet.selection }}</p>
           </div>
+
+          <p
+            v-if="deleteError"
+            data-test-id="bets-delete-modal-error"
+            class="text-xs text-red-600"
+          >
+            {{ deleteError }}
+          </p>
 
           <div class="flex justify-end space-x-2 mt-4">
             <button
               type="button"
               @click="closeDeleteModal"
+              data-test-id="bets-delete-modal-cancel-button"
               class="px-4 py-2 text-sm rounded border bg-gray-100 hover:bg-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
               :disabled="isDeleting"
             >
@@ -1299,6 +1367,7 @@ const columnOptions: Array<{
             <button
               type="button"
               @click="confirmDelete"
+              data-test-id="bets-delete-modal-confirm-button"
               class="px-4 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
               :disabled="isDeleting"
             >

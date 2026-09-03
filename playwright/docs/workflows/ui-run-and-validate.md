@@ -2,6 +2,8 @@
 
 > Guard: if `.ai/ui-workflow-state.json` shows `stage: "done"` for this scope with no failures recorded, don't re-run automatically — confirm with the user first.
 
+> **Hard stop:** Never run any Playwright test command (`npx playwright test`, etc.) as a natural continuation of generating/editing code, "to verify the change works," or for any other reason — no matter how routine or low-risk it seems. The only trigger for running tests is an explicit "Yes" from the user to the question below, given in the current conversation. If that Yes hasn't been given yet, running tests is not the next step — asking the question is.
+
 Immediately after Playwright UI test code has been generated for a scope (as part of the **Generate Playwright UI Tests** workflow), always ask the user:
 
 > **Would you like to run the newly created tests now?** (Yes / No)
@@ -62,6 +64,7 @@ This is the same script used by the API workflow — it works identically regard
 - Never run tests against an environment without the user explicitly confirming both the environment and the run scope first.
 - Do not skip the summarization step — always run `summarize-test-results.js` after the test run and present its output, even if all tests passed.
 - Never assume the web dev server is running for `dev` — always confirm or offer to start it first.
+- Treat "I just wrote/changed test code" as zero justification for running it — the Yes/No question and its two follow-ups are the only valid trigger, every single time, not just once per session.
 
 ---
 

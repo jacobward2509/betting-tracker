@@ -36,7 +36,7 @@ test.describe('Bets Filters', () => {
     const email = randomSignupEmail();
     token = await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
     if (token) await seedBets(request, token, seededBetsFixture());
-    await page.goto('/bets');
+    await BetsPage.expectBetsLoaded(page, () => page.goto('/bets'));
   });
 
   test.afterEach(async ({ request }) => {

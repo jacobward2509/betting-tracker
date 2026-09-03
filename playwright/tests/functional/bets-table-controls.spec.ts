@@ -23,7 +23,7 @@ test.describe('Bets Table Controls', () => {
     const email = randomSignupEmail();
     token = await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
     if (token) await seedBets(request, token, seededPaginatedBetsFixture());
-    await page.goto('/bets');
+    await BetsPage.expectBetsLoaded(page, () => page.goto('/bets'));
   });
 
   test.afterEach(async ({ request }) => {
