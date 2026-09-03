@@ -1,0 +1,838 @@
+openapi: 3.1.0
+info:
+  title: Betting Tracker API — Bets
+  description: >
+    Core bet CRUD (create/list/update/bulk-result/delete), the flattened
+    team/player autocomplete endpoint the Add/Edit Bet UI's manual-entry
+    fields use, and the bookmaker/bet-type lookup endpoints. This document is
+    the fourth split out of a single `openapi.yaml` (see
+    `apps/api/openapi/auth.yaml` for account/session endpoints,
+    `apps/api/openapi/user-config.yaml` for bookmaker/bet-type preferences,
+    and `apps/api/openapi/fixtures.yaml` for cached fixture data and the
+    structured market catalog) to keep each grouping's file a manageable
+    size.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: Bets
+    description: Creating, listing, updating, and deleting logged bets.
+  - name: Suggestions
+    description: >
+      Flattened team/player name autocomplete, derived from the current
+      user's own bet history — powers the manual-entry fixture/player
+      `<datalist>` fields in the Add/Edit Bet UI.
+  - name: Lookups
+    description: >
+      Flat bookmaker/bet-type/player-prop-market lookup tables. `BetTypes`
+      and `PlayerPropMarkets` are legacy — superseded by the structured
+      Market/MarketSelection/MarketLine catalog (see
+      `apps/api/openapi/fixtures.yaml`) — but kept available unchanged for
+      backward compatibility with historical bet data and the Add/Edit Bet
+      UI's "Other" free-text bet type.
+
+paths:
+  /api/bets:
+    get:
+      tags: [Bets]
+      summary: List the current user's bets
+      description: >
+        Returns every bet belonging to the current user, most recently
+        placed first, each including its resolved multi-leg detail (if any).
+        All three query parameters are optional and combine with AND
+        semantics; `search` matches case-insensitively against either
+        `fixture` or `selection`.
+      operationId: listBets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Case-insensitive substring match against `fixture` or `selection`.
+          example: Arsenal
+        - name: bookmaker
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Bookmaker'
+        - name: result
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/BetResult'
+      responses:
+        '200':
+          description: The user's bets, most recently placed first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bet'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags: [Bets]
+      summary: Create a new bet
+      description: >
+        Creates a bet for the current user. Single-fixture bet types (Match,
+        Player Prop, Superboost, Other) populate `fixture`/`selection`
+        directly from the request body's flat fields; multi-leg bet types
+        (Accumulator, Bet Builder, Cross Match Bet Builder) instead send a
+        `legs` array — each leg is resolved server-side against the
+        structured Fixture/Market/MarketSelection/Player catalog, and
+        `fixture`/`selection` are then derived automatically from the
+        resolved legs, overriding whatever flat values were sent. `profit`
+        and `potentialReturn` are always computed server-side from
+        `stake`/`odds`/`result`/`stakeType`/`cashOutValue` — any client-sent
+        values for either are ignored.
+      operationId: createBet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBetRequest'
+      responses:
+        '200':
+          description: Bet created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bet'
+        '400':
+          description: >
+            Invalid odds (must be decimal >= 1, e.g. `2.5`, or fractional,
+            e.g. `3/2`), or an invalid/missing `normalStake` when
+            `stakeType` is `NORMAL_PLUS_FREE`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlainErrorResponse'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '422':
+          description: >
+            Multi-leg validation failure — e.g. an Accumulator with fewer
+            than 2 distinct fixtures, a Bet Builder spanning more than 1
+            fixture, or a leg referencing a market/selection/player that
+            doesn't exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlainErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+
+  /api/bets/{id}:
+    put:
+      tags: [Bets]
+      summary: Update an existing bet
+      description: >
+        Updates a bet owned by the current user. Every field is effectively
+        optional — any field omitted from the request body falls back to
+        the bet's existing value — except that `legs` is special-cased: for
+        a multi-leg bet type, omitting `legs` entirely leaves the bet's
+        existing legs untouched, while sending `legs` (even as an empty-ish
+        edit) wholesale replaces them. `profit` and `potentialReturn` are
+        always recomputed server-side.
+      operationId: updateBet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBetRequest'
+      responses:
+        '200':
+          description: Bet updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bet'
+        '400':
+          description: Invalid odds, or an invalid/missing `normalStake` when `stakeType` is `NORMAL_PLUS_FREE`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlainErrorResponse'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '404':
+          description: No bet with the given id exists for the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlainErrorResponse'
+        '422':
+          description: Multi-leg validation failure (see `POST /api/bets`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlainErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags: [Bets]
+      summary: Delete a bet
+      description: Permanently deletes a bet (and its legs, via cascade) owned by the current user.
+      operationId: deleteBet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Bet deleted successfully. No response body.
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '404':
+          description: No bet with the given id exists for the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlainErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+
+  /api/bets/bulk-result:
+    patch:
+      tags: [Bets]
+      summary: Apply the same result to multiple bets at once
+      description: >
+        Sets `result` (and, for `VOID`, `cashOutValue`) on every bet in
+        `ids` owned by the current user, recomputing `profit` for each.
+        Bets in `ids` that don't exist or aren't owned by the current user
+        are silently skipped rather than causing the whole request to fail
+        — the response's `ids`/`updatedCount` reflect only the bets that
+        were actually updated.
+      operationId: bulkUpdateBetResult
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkResultRequest'
+      responses:
+        '200':
+          description: Matching bets updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkResultResponse'
+        '400':
+          description: >
+            No `ids` provided, or `result` is `VOID` without a valid
+            non-negative `cashOutValue`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlainErrorResponse'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '404':
+          description: None of the given `ids` matched a bet owned by the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlainErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+
+  /api/suggestions:
+    get:
+      tags: [Suggestions]
+      summary: Get team/player name autocomplete suggestions from the user's bet history
+      description: >
+        Returns two ranked, deduplicated name lists derived from the
+        current user's most recent 5000 bets: `teams`, parsed from every
+        `"<home> vs <away>"` fixture string, and `players`, parsed from the
+        selection text of every Player Prop bet. Both lists are sorted by
+        how often each name occurs (descending), then alphabetically for
+        ties. Powers the manual-entry team/player `<datalist>` fields in the
+        Add/Edit Bet UI.
+      operationId: getSuggestions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Suggestions returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionsResponse'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+
+  /api/bookmakers:
+    get:
+      tags: [Lookups]
+      summary: List bookmakers, filtered to the current user's enabled set when available
+      description: >
+        Returns every tracked bookmaker if called without an authenticated
+        session, or if the current user has no enabled-bookmaker
+        preferences recorded yet; otherwise returns only the bookmakers the
+        current user has enabled (see `PUT /api/user/config` in
+        `apps/api/openapi/user-config.yaml`). Unlike every other endpoint in
+        this API, authentication here is optional — an unauthenticated
+        caller simply gets the unfiltered list rather than a 401.
+      operationId: listBookmakers
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: Bookmakers returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookmakerRow'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [error]
+                properties:
+                  error:
+                    type: string
+                    example: Failed to fetch bookmakers
+
+
+  /api/bet-types:
+    get:
+      tags: [Lookups]
+      summary: List tracked bet types (legacy flat lookup)
+      description: >
+        Returns every tracked bet type from the legacy `BetTypes` table.
+        Superseded by the structured Market catalog
+        (`GET /api/markets` in `apps/api/openapi/fixtures.yaml`) for the
+        Add/Edit Bet UI's Match/Player Prop flows, but still the source of
+        truth for the bet-type dropdown itself (Accumulator, Bet Builder,
+        Player Prop, Superboost, Other, etc.) and for validating
+        `defaultBetType` on `PUT /api/user/config`.
+      operationId: listBetTypes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Bet types returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BetTypeRow'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/player-prop-markets:
+    get:
+      tags: [Lookups]
+      summary: List player prop markets (legacy flat lookup)
+      description: >
+        Returns every market from the legacy `PlayerPropMarkets` table.
+        Fully superseded by the structured Market catalog's PLAYER-category
+        entries (`GET /api/markets` in `apps/api/openapi/fixtures.yaml`) for
+        the Add/Edit Bet UI going forward, but kept available unchanged for
+        backward compatibility with historical bet data still referencing
+        these flat string values via `Bet.playerPropMarket`.
+      operationId: listPlayerPropMarkets
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Player prop markets returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayerPropMarketRow'
+        '401':
+          $ref: '#/components/responses/PlainUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+
+components:
+  responses:
+    InternalServerError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PlainErrorResponse'
+    PlainUnauthorized:
+      description: >
+        Missing, invalid, or expired session token. `requireAuth`
+        (apps/api/src/server.ts) returns a plain `{ error: "Unauthorized" }`
+        (a string, not the nested `{ code, message, fields? }` object used
+        by apps/api/openapi/auth.yaml/user-config.yaml) for every
+        auth-failure path on every endpoint in this file — see
+        `apps/api/openapi/auth.yaml`'s identically-named response for the
+        same deviation noted against the Auth endpoints.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PlainErrorResponse'
+
+  schemas:
+    PlainErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: >
+            Every endpoint in this file returns errors as a plain string
+            under `error`, not the nested `{ code, message, fields? }`
+            object documented in apps/api/openapi/auth.yaml/user-config.yaml.
+          example: Bet not found
+
+    Bookmaker:
+      type: string
+      description: Matches the `Bookmaker` enum in `apps/api/prisma/schema.prisma`.
+      enum:
+        - Bet365
+        - Betfair
+        - BetUK
+        - Ladbrokes
+        - PaddyPower
+        - SkyBet
+        - WilliamHill
+        - Coral
+        - BetVictor
+        - Betfred
+        - EightEightEightSport
+        - Unibet
+        - LiveScoreBet
+        - BoyleSports
+        - VirginBet
+        - Betway
+        - ThirtyTwoRed
+        - GrosvenorSport
+        - QuinnBet
+        - Spreadex
+        - MansionBet
+        - StarSports
+        - CasumoBet
+      example: Bet365
+
+    StakeType:
+      type: string
+      description: >
+        Matches the `StakeType` enum in `apps/api/prisma/schema.prisma`.
+        `NORMAL_PLUS_FREE` requires `normalStake` (the portion of `stake`
+        that is real money, capped at `stake`) to also be set.
+      enum: [NORMAL, FREE, NORMAL_PLUS_FREE]
+      example: NORMAL
+
+    BetResult:
+      type: string
+      description: Matches the `BetResult` enum in `apps/api/prisma/schema.prisma`.
+      enum: [OPEN, WON, LOST, VOID]
+      example: OPEN
+
+
+    BetLegInput:
+      type: object
+      additionalProperties: false
+      required: [fixtureId, marketId, selectionId]
+      properties:
+        fixtureId:
+          type: string
+          format: uuid
+        marketId:
+          type: integer
+        selectionId:
+          type: integer
+        lineValue:
+          type: number
+          format: double
+          nullable: true
+        playerId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required when the referenced market's `requiresPlayer` is true.
+
+    BetLeg:
+      type: object
+      additionalProperties: false
+      required: [id, order, fixtureId, marketId, selectionId, lineValue, playerId, description]
+      properties:
+        id:
+          type: string
+          format: uuid
+        order:
+          type: integer
+        fixtureId:
+          type: string
+          format: uuid
+        marketId:
+          type: integer
+        selectionId:
+          type: integer
+        lineValue:
+          type: number
+          format: double
+          nullable: true
+        playerId:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          description: Server-generated per-leg summary, e.g. `"Saka Player Shots Over 2.5"`.
+          example: Saka Player Shots Over 2.5
+
+
+    Bet:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - fixture
+        - selection
+        - bookmaker
+        - stakeType
+        - betType
+        - playerPropMarket
+        - stake
+        - normalStake
+        - odds
+        - oddsBoostPercent
+        - potentialReturn
+        - result
+        - cashOutValue
+        - profit
+        - placedAt
+        - createdAt
+        - updatedAt
+        - marketId
+        - selectionId
+        - lineValue
+        - fixtureId
+        - playerId
+        - legs
+      properties:
+        id:
+          type: string
+          format: uuid
+        fixture:
+          type: string
+          description: >
+            Flat display string, e.g. `"Arsenal vs Chelsea"` for a
+            single-fixture bet, or the bet type itself (e.g.
+            `"Accumulator"`) for multi-leg bets.
+          example: Arsenal vs Chelsea
+        selection:
+          type: string
+          example: Saka Player Shots Over 2.5
+        bookmaker:
+          $ref: '#/components/schemas/Bookmaker'
+        stakeType:
+          $ref: '#/components/schemas/StakeType'
+        betType:
+          type: string
+          description: Free-text bet type, drawn from `GET /api/bet-types` (or "Other").
+          example: Player Prop
+        playerPropMarket:
+          type: string
+          nullable: true
+          description: Legacy flat player-prop market string; null for non-Player-Prop bets.
+          example: Player Shots
+        stake:
+          type: number
+          format: double
+        normalStake:
+          type: number
+          format: double
+          nullable: true
+          description: Only set when `stakeType` is `NORMAL_PLUS_FREE`.
+        odds:
+          type: number
+          format: double
+          description: Final (post-boost, if any) decimal odds. Always >= 1.
+        oddsBoostPercent:
+          type: number
+          format: double
+          nullable: true
+        potentialReturn:
+          type: number
+          format: double
+          description: Always `stake * odds`, computed server-side.
+        result:
+          $ref: '#/components/schemas/BetResult'
+        cashOutValue:
+          type: number
+          format: double
+          nullable: true
+          description: Only set when `result` is `VOID`.
+        profit:
+          type: number
+          format: double
+          nullable: true
+          description: >
+            Server-computed profit/loss. Null when it can't yet be
+            determined (e.g. `result` is `VOID` with no `cashOutValue`).
+        placedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        marketId:
+          type: integer
+          nullable: true
+          description: Null for multi-leg bet types — see `legs` instead.
+        selectionId:
+          type: integer
+          nullable: true
+        lineValue:
+          type: number
+          format: double
+          nullable: true
+        fixtureId:
+          type: string
+          format: uuid
+          nullable: true
+        playerId:
+          type: string
+          format: uuid
+          nullable: true
+        legs:
+          type: array
+          description: Non-empty only for multi-leg bet types (Accumulator, Bet Builder, Cross Match Bet Builder).
+          items:
+            $ref: '#/components/schemas/BetLeg'
+
+
+    CreateBetRequest:
+      type: object
+      additionalProperties: true
+      required: [fixture, selection, bookmaker, stakeType, betType, stake, odds, result, placedAt]
+      description: >
+        `additionalProperties: true` reflects the actual server behavior —
+        the request body is spread directly into the Prisma create call
+        after normalization, so unrecognized fields are accepted and simply
+        ignored/overwritten rather than rejected. `fixture`/`selection`
+        below are only used as-sent for single-fixture bet types; for
+        multi-leg types they're overwritten from `legs`.
+      properties:
+        fixture:
+          type: string
+          example: Arsenal vs Chelsea
+        selection:
+          type: string
+          example: Saka Player Shots Over 2.5
+        bookmaker:
+          $ref: '#/components/schemas/Bookmaker'
+        stakeType:
+          $ref: '#/components/schemas/StakeType'
+        betType:
+          type: string
+          example: Player Prop
+        playerPropMarket:
+          type: string
+          nullable: true
+        stake:
+          type: number
+          format: double
+          minimum: 0
+        normalStake:
+          type: number
+          format: double
+          nullable: true
+          description: Required, and must be between 0 and `stake`, when `stakeType` is `NORMAL_PLUS_FREE`.
+        odds:
+          oneOf:
+            - type: number
+              format: double
+              minimum: 1
+            - type: string
+              pattern: '^\d+\s*/\s*\d+$'
+          description: Decimal (`>= 1`, e.g. `2.5`) or fractional (e.g. `"3/2"`) odds.
+          example: 2.5
+        oddsBoostPercent:
+          type: number
+          format: double
+          nullable: true
+        result:
+          $ref: '#/components/schemas/BetResult'
+        cashOutValue:
+          type: number
+          format: double
+          nullable: true
+          description: Required, and must be >= 0, when `result` is `VOID`.
+        placedAt:
+          type: string
+          format: date-time
+        marketId:
+          type: integer
+          nullable: true
+        selectionId:
+          type: integer
+          nullable: true
+        lineValue:
+          type: number
+          format: double
+          nullable: true
+        fixtureId:
+          type: string
+          format: uuid
+          nullable: true
+        playerId:
+          type: string
+          format: uuid
+          nullable: true
+        legs:
+          type: array
+          description: Required (min 2 legs for Accumulator/Cross Match Bet Builder, min 2 for Bet Builder) for multi-leg bet types; ignored otherwise.
+          items:
+            $ref: '#/components/schemas/BetLegInput'
+
+
+    UpdateBetRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateBetRequest'
+      description: >
+        Same shape as `CreateBetRequest`, but every field is effectively
+        optional — anything omitted falls back to the existing bet's
+        current value. `legs` is the one exception: omitting it entirely
+        leaves existing legs untouched; sending it (for a multi-leg bet
+        type) always wholesale-replaces them.
+      required: []
+
+    BulkResultRequest:
+      type: object
+      additionalProperties: false
+      required: [ids, result]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        result:
+          $ref: '#/components/schemas/BetResult'
+        cashOutValue:
+          type: number
+          format: double
+          nullable: true
+          description: Required, and must be >= 0, when `result` is `VOID`; ignored otherwise.
+
+    BulkResultResponse:
+      type: object
+      additionalProperties: false
+      required: [updatedCount, ids]
+      properties:
+        updatedCount:
+          type: integer
+          description: Number of bets actually matched and updated (may be less than the number of `ids` sent).
+        ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    SuggestionsResponse:
+      type: object
+      additionalProperties: false
+      required: [teams, players]
+      properties:
+        teams:
+          type: array
+          items:
+            type: string
+          example: [Arsenal, Chelsea, Liverpool]
+        players:
+          type: array
+          items:
+            type: string
+          example: [Bukayo Saka, Mohamed Salah]
+
+    BookmakerRow:
+      type: object
+      additionalProperties: false
+      required: [id, bookmakers]
+      properties:
+        id:
+          type: integer
+        bookmakers:
+          $ref: '#/components/schemas/Bookmaker'
+
+    BetTypeRow:
+      type: object
+      additionalProperties: false
+      required: [id, betTypes]
+      properties:
+        id:
+          type: integer
+        betTypes:
+          type: string
+          example: Player Prop
+
+    PlayerPropMarketRow:
+      type: object
+      additionalProperties: false
+      required: [id, markets]
+      properties:
+        id:
+          type: integer
+        markets:
+          type: string
+          example: Player Shots
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+security:
+  - bearerAuth: []
+

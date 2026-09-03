@@ -972,53 +972,6 @@ app.get('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req,
   res.json(bets);
 }));
 
-app.get('/api/team-suggestions', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
-  const query = String(req.query.q || '')
-    .trim()
-    .toLowerCase();
-  const rows = await prisma.bet.findMany({
-    where: {
-      userId: req.user?.id,
-      fixture: {
-        contains: 'vs',
-        mode: 'insensitive',
-      },
-    },
-    select: {
-      fixture: true,
-    },
-    orderBy: {
-      placedAt: 'desc',
-    },
-    take: 5000,
-  });
-
-  const stats = new Map<string, { name: string; count: number }>();
-  for (const row of rows) {
-    const teams = parseFixtureTeams(row.fixture);
-    for (const team of teams) {
-      const key = team.toLowerCase();
-      const existing = stats.get(key);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        stats.set(key, { name: team, count: 1 });
-      }
-    }
-  }
-
-  const suggestions = Array.from(stats.values())
-    .filter((item) => !query || item.name.toLowerCase().includes(query))
-    .sort((a, b) => {
-      if (b.count !== a.count) return b.count - a.count;
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, 100)
-    .map((item) => item.name);
-
-  return res.json(suggestions);
-}));
-
 app.get('/api/suggestions', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
   const rows = await prisma.bet.findMany({
     where: {
@@ -1080,50 +1033,6 @@ app.get('/api/suggestions', requireAuth, asyncHandler<AuthenticatedRequest>(asyn
     .map((item) => item.name);
 
   return res.json({ teams, players });
-}));
-
-app.get('/api/player-suggestions', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
-  const query = String(req.query.q || '')
-    .trim()
-    .toLowerCase();
-  const rows = await prisma.bet.findMany({
-    where: {
-      userId: req.user?.id,
-      betType: 'Player Prop',
-    },
-    select: {
-      selection: true,
-      playerPropMarket: true,
-    },
-    orderBy: {
-      placedAt: 'desc',
-    },
-    take: 5000,
-  });
-
-  const stats = new Map<string, { name: string; count: number }>();
-  for (const row of rows) {
-    const player = parsePlayerFromSelection(row.selection, row.playerPropMarket);
-    if (!player) continue;
-    const key = player.toLowerCase();
-    const existing = stats.get(key);
-    if (existing) {
-      existing.count += 1;
-    } else {
-      stats.set(key, { name: player, count: 1 });
-    }
-  }
-
-  const suggestions = Array.from(stats.values())
-    .filter((item) => !query || item.name.toLowerCase().includes(query))
-    .sort((a, b) => {
-      if (b.count !== a.count) return b.count - a.count;
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, 100)
-    .map((item) => item.name);
-
-  return res.json(suggestions);
 }));
 
 app.post('/api/bets', requireAuth, asyncHandler<AuthenticatedRequest>(async (req, res) => {
