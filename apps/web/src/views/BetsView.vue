@@ -757,20 +757,29 @@ const columnOptions: Array<{
   <div class="p-4">
     <div class="mb-3 flex justify-center md:justify-end">
       <div class="flex flex-wrap items-center justify-center gap-4 text-sm">
-        <div class="text-center">
+        <div class="text-center" data-test-id="bets-total-count">
           <p class="text-xs text-gray-500 dark:text-gray-400">Total Bets</p>
-          <p class="font-semibold text-gray-900 dark:text-gray-100">{{ totalBets }}</p>
+          <p
+            class="font-semibold text-gray-900 dark:text-gray-100"
+            data-test-id="bets-total-count-value"
+          >
+            {{ totalBets }}
+          </p>
         </div>
-        <div class="text-center">
+        <div class="text-center" data-test-id="bets-favourite-bookie">
           <p class="text-xs text-gray-500 dark:text-gray-400">Favourite Bookie</p>
-          <p class="font-semibold text-gray-900 dark:text-gray-100">
+          <p
+            class="font-semibold text-gray-900 dark:text-gray-100"
+            data-test-id="bets-favourite-bookie-value"
+          >
             {{ getBookmakerLabel(String(favouriteBookie || "")) }}
           </p>
         </div>
-        <div class="text-center">
+        <div class="text-center" data-test-id="bets-total-profit-loss">
           <p class="text-xs text-gray-500 dark:text-gray-400">Total P/L</p>
           <p
             class="font-semibold"
+            data-test-id="bets-total-profit-loss-value"
             :class="
               totalProfitLoss > 0
                 ? 'text-green-700'
@@ -784,6 +793,7 @@ const columnOptions: Array<{
         </div>
       </div>
     </div>
+
 
     <BetsTableControls
       :filters="filters"

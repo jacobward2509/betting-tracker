@@ -63,12 +63,14 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
     <div class="flex items-center justify-between gap-2 p-3">
       <button
         @click="isExpanded = !isExpanded"
+        data-test-id="bets-filters-toggle-button"
         class="inline-flex items-center gap-2 text-sm font-semibold text-gray-800 hover:text-gray-900 dark:text-gray-100 dark:hover:text-white"
       >
         <span>{{ isExpanded ? "▼" : "▶" }}</span>
         <span>Filters</span>
         <span
           v-if="hasActiveFilters"
+          data-test-id="bets-filters-active-badge"
           class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
         >
           {{ activeFilterCount }} active
@@ -79,6 +81,7 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
         <button
           v-if="hasActiveFilters"
           @click="clearFilters"
+          data-test-id="bets-filters-clear-button"
           class="bg-red-600 hover:bg-red-700 text-white border border-gray-300 px-3 py-1.5 text-sm rounded-md dark:border-gray-700"
         >
           Clear
@@ -86,7 +89,12 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
       </div>
     </div>
 
-    <div v-if="isExpanded" class="border-t border-gray-100 p-3 pt-4 dark:border-gray-800">
+    <div
+      v-if="isExpanded"
+      data-test-id="bets-filters-panel-body"
+      class="border-t border-gray-100 p-3 pt-4 dark:border-gray-800"
+    >
+
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <div>
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400"
@@ -95,6 +103,7 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
           <select
             :value="filters.season"
             @change="updateFilter('season', ($event.target as HTMLSelectElement).value)"
+            data-test-id="bets-filter-season-select"
             class="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
             <option v-for="option in seasonOptions" :key="option" :value="option">
@@ -111,6 +120,7 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
             :value="filters.fixture"
             @input="updateFilter('fixture', ($event.target as HTMLInputElement).value)"
             placeholder="Search fixture"
+            data-test-id="bets-filter-fixture-input"
             class="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
         </div>
@@ -123,6 +133,7 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
             :value="filters.date"
             @input="updateFilter('date', ($event.target as HTMLInputElement).value)"
             type="date"
+            data-test-id="bets-filter-date-input"
             class="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
         </div>
@@ -134,6 +145,7 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
           <select
             :value="filters.bookie"
             @change="updateFilter('bookie', ($event.target as HTMLSelectElement).value)"
+            data-test-id="bets-filter-bookie-select"
             class="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
             <option value="">All Bookies</option>
@@ -150,6 +162,7 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
           <select
             :value="filters.stakeType"
             @change="updateFilter('stakeType', ($event.target as HTMLSelectElement).value)"
+            data-test-id="bets-filter-stake-type-select"
             class="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
             <option value="">All Stake Types</option>
@@ -166,6 +179,7 @@ const getBookmakerLabel = (bookmaker: string) => formatBookmakerLabel(bookmaker)
           <select
             :value="filters.result"
             @change="updateFilter('result', ($event.target as HTMLSelectElement).value)"
+            data-test-id="bets-filter-result-select"
             class="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
             <option value="">All Results</option>
