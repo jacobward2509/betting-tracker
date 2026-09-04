@@ -140,7 +140,8 @@
   mobile card layout of non-selection fields** — already covered by
   `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-table-display.md`;
   referenced, not re-documented here.
-- **Add Bet** (`AddBetModal.vue`) — future dedicated UI test plan.
+- **Add Bet** (`AddBetModal.vue`) — covered by
+  `playwright/docs/test-plans/ui/bets/ui-test-plan-add-bet.md`.
 - **Edit Bet** (`EditBetModal.vue`) — this plan only verifies that clicking a row's
   or card's "Edit" button is present and clickable (Scenarios 1–2); the modal's own
   contents, validation, and save behaviour belong to its own future dedicated UI

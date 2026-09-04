@@ -1,20 +1,20 @@
 <!-- eslint-disable @typescript-eslint/no-explicit-any -->
 <template>
-  <div v-if="show" class="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50">
+  <div v-if="show" class="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50" data-test-id="add-bet-modal">
     <div class="flex min-h-full items-start justify-center p-4 md:items-center">
       <div
         class="bg-white rounded-lg shadow-lg w-full max-w-md mx-auto max-h-[calc(100vh-2rem)] overflow-y-auto dark:bg-gray-900"
       >
         <div class="flex items-center justify-between p-4 border-b dark:border-gray-700">
-          <h3 class="text-lg font-medium text-gray-800 dark:text-gray-100">Add New Bet</h3>
-          <button @click="closeModal" class="text-gray-500 hover:text-gray-700 text-xl dark:text-gray-400 dark:hover:text-gray-200">
+          <h3 class="text-lg font-medium text-gray-800 dark:text-gray-100" data-test-id="add-bet-modal-heading">Add New Bet</h3>
+          <button @click="closeModal" class="text-gray-500 hover:text-gray-700 text-xl dark:text-gray-400 dark:hover:text-gray-200" data-test-id="add-bet-modal-close-button">
             &times;
           </button>
         </div>
 
         <form @submit.prevent="submitBet" class="p-4 space-y-4" data-test-id="add-bet-form">
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Date</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-date-label">Date</label>
             <input
               type="date"
               v-model="date"
@@ -26,7 +26,7 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-type-label">Bet Type</label>
             <select
               v-model="betType"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -41,7 +41,7 @@
           </div>
 
           <div v-if="betType === 'Other'">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bet Type</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-other-bet-type-label">Bet Type</label>
             <input
               v-model="otherBetType"
               type="text"
@@ -52,7 +52,7 @@
           </div>
 
           <div v-if="isMultiLegBetType">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Legs</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-legs-label">Legs</label>
             <BetLegsEditor
               :key="legsEditorKey"
               class="mt-1"
@@ -67,7 +67,7 @@
           </div>
 
           <div v-if="betType !== 'Accumulator' && !isMultiLegBetType">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Fixture</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-fixture-label">Fixture</label>
             <select
               v-model="selectedFixtureId"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -115,7 +115,7 @@
           </div>
 
           <div v-if="isMarketBetType && hasFixtureSelected">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Market</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-market-label">Market</label>
             <select
               v-model="selectedMarketId"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -131,7 +131,7 @@
 
 
           <div v-if="isMarketBetType && selectedMarket && selectedMarket.requiresPlayer">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Player</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-player-label">Player</label>
             <select
               v-model="selectedPlayerId"
               class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -186,7 +186,7 @@
           </div>
 
           <div v-if="isMarketBetType && selectedMarket && selectedMarket.selections.length && !isYesOnlyMarket">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Selection</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-selection-label">Selection</label>
             <select
               v-if="shouldCombineSelectionAndLine(selectedMarket)"
               v-model="combinedSelectionLine"
@@ -215,7 +215,7 @@
 
           <div class="grid gap-3 sm:grid-cols-2">
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Bookmaker</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-bookmaker-label">Bookmaker</label>
               <select
                 v-model="bookie"
                 class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -231,7 +231,7 @@
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Stake Type</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-stake-type-label">Stake Type</label>
               <select
                 v-model="stakeType"
                 class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -248,7 +248,7 @@
 
           <div class="grid gap-3 sm:grid-cols-2">
             <div v-if="stakeType !== 'Normal + Free'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Stake (£)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-stake-label">Stake (£)</label>
               <input
                 type="number"
                 v-model.number="stake"
@@ -261,7 +261,7 @@
             </div>
             <template v-else>
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Normal Stake (£)</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-normal-stake-label">Normal Stake (£)</label>
                 <input
                   type="number"
                   v-model.number="normalStake"
@@ -269,10 +269,11 @@
                   step="0.01"
                   class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                   required
+                  data-test-id="input-normal-stake"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Free Stake (£)</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-free-stake-label">Free Stake (£)</label>
                 <input
                   type="number"
                   v-model.number="freeStake"
@@ -280,12 +281,13 @@
                   step="0.01"
                   class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                   required
+                  data-test-id="input-free-stake"
                 />
               </div>
             </template>
 
             <div :class="stakeType === 'Normal + Free' ? 'sm:col-span-2' : ''">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Odds</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-odds-label">Odds</label>
               <div
                 v-if="props.oddsFormat === 'fractional'"
                 class="mt-1 flex items-center gap-2"
@@ -298,6 +300,7 @@
                   step="1"
                   class="block w-20 border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                   required
+                  data-test-id="input-odds-numerator"
                 />
                 <span class="text-sm font-semibold text-gray-600 dark:text-gray-300">/</span>
                 <input
@@ -307,6 +310,7 @@
                   step="1"
                   class="block w-20 border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                   required
+                  data-test-id="input-odds-denominator"
                 />
               </div>
               <input
@@ -322,7 +326,7 @@
           </div>
 
           <div>
-            <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+            <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-odds-boost-label">
               <input
                 v-model="isOddsBoost"
                 type="checkbox"
@@ -332,7 +336,7 @@
               Odds Boost?
             </label>
             <div v-if="isOddsBoost" class="mt-2">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Boost (%)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-odds-boost-percent-label">Boost (%)</label>
               <input
                 v-model.number="oddsBoostPercent"
                 type="number"
@@ -348,7 +352,7 @@
 
           <div class="grid gap-3 sm:grid-cols-2">
             <div :class="result === 'Cashed Out' ? '' : 'sm:col-span-2'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Result</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-result-label">Result</label>
               <select
                 v-model="result"
                 class="mt-1 block w-full border rounded px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -363,7 +367,7 @@
             </div>
 
             <div v-if="result === 'Cashed Out'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Cash Out Value (£)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-cash-out-value-label">Cash Out Value (£)</label>
               <input
                 v-model.number="cashOutValue"
                 type="number"
@@ -408,18 +412,20 @@
     <div
       v-if="showAddAnotherPrompt"
       class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      data-test-id="add-another-bet-prompt"
     >
       <div class="w-full max-w-sm rounded-lg bg-white p-4 shadow-xl dark:bg-gray-900">
-        <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+        <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100" data-test-id="add-another-bet-heading">
           Add another?
         </h4>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300" data-test-id="add-another-bet-text">
           Bet added successfully. Would you like to add another bet on the same fixture?
         </p>
         <div class="mt-4 flex justify-end gap-2">
           <button
             type="button"
             class="px-3 py-1.5 text-sm rounded border bg-gray-100 hover:bg-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+            data-test-id="add-another-bet-no-button"
             @click="handleAddAnotherChoice(false)"
           >
             No
@@ -427,6 +433,7 @@
           <button
             type="button"
             class="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+            data-test-id="add-another-bet-yes-button"
             @click="handleAddAnotherChoice(true)"
           >
             Yes

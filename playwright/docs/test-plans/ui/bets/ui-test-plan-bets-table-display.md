@@ -104,7 +104,8 @@
   result-update bar, per-row "Edit"/"Delete" buttons, Delete confirmation
   modal) — covered by
   `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-row-selection-bulk-actions.md`.
-- **Add Bet** (`AddBetModal.vue`) — future dedicated UI test plan.
+- **Add Bet** (`AddBetModal.vue`) — covered by
+  `playwright/docs/test-plans/ui/bets/ui-test-plan-add-bet.md`.
 - **Edit Bet** (`EditBetModal.vue`) — future dedicated UI test plan.
 - **Persistence of table state across reloads** (rows-per-page, sort
   key/direction, and current page are persisted to `localStorage` under

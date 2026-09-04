@@ -78,7 +78,8 @@
 - **Row selection & bulk actions** (per-row/select-all checkboxes, bulk result-update
   bar, per-row "Edit"/"Delete" buttons, Delete confirmation modal) — covered by
   `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-row-selection-bulk-actions.md`.
-- **Add Bet** (`AddBetModal.vue`) — future dedicated UI test plan.
+- **Add Bet** (`AddBetModal.vue`) — covered by
+  `playwright/docs/test-plans/ui/bets/ui-test-plan-add-bet.md`.
 - **Edit Bet** (`EditBetModal.vue`) — future dedicated UI test plan.
 - **Actual filtering behaviour of the bets table** (i.e. that selecting a filter value
   correctly narrows the rows shown) — the table itself is out of scope per the above;

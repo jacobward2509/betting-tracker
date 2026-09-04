@@ -15,7 +15,7 @@
 <template>
   <div class="space-y-3">
     <div v-if="betType === 'Bet Builder'">
-      <label class="block text-xs font-medium text-gray-600 dark:text-gray-300">Fixture</label>
+      <label class="block text-xs font-medium text-gray-600 dark:text-gray-300" data-test-id="bet-builder-fixture-label">Fixture</label>
       <select
         v-model="sharedFixtureId"
         class="mt-1 block w-full border rounded px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -55,7 +55,7 @@
       </div>
 
       <div v-if="betType !== 'Bet Builder'" class="mt-2">
-        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300">Fixture</label>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300" :data-test-id="`bet-leg-fixture-label-${index}`">Fixture</label>
         <select
           v-model="leg.fixtureId"
           class="mt-1 block w-full border rounded px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -78,13 +78,13 @@
 
         </select>
 
-        <p v-if="fixtureConflictMessage(index)" class="mt-1 text-xs text-red-600 dark:text-red-400">
+        <p v-if="fixtureConflictMessage(index)" class="mt-1 text-xs text-red-600 dark:text-red-400" :data-test-id="`bet-leg-fixture-conflict-${index}`">
           {{ fixtureConflictMessage(index) }}
         </p>
       </div>
 
       <div class="mt-2">
-        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300">Market</label>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300" :data-test-id="`bet-leg-market-label-${index}`">Market</label>
         <select
           v-model="leg.marketId"
           class="mt-1 block w-full border rounded px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -103,7 +103,7 @@
       </div>
 
       <div v-if="marketFor(leg)?.requiresPlayer" class="mt-2">
-        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300">Player</label>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300" :data-test-id="`bet-leg-player-label-${index}`">Player</label>
         <select
           v-model="leg.playerId"
           class="mt-1 block w-full border rounded px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -142,7 +142,7 @@
       </div>
 
       <div v-if="marketFor(leg) && marketFor(leg)!.selections.length && !isYesOnlyMarket(leg)" class="mt-2">
-        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300">Selection</label>
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300" :data-test-id="`bet-leg-selection-label-${index}`">Selection</label>
         <select
           v-if="shouldCombineSelectionAndLine(marketFor(leg))"
           :value="combinedValueFor(leg)"
@@ -178,7 +178,7 @@
       + Add leg
     </button>
 
-    <p v-if="ruleMessage" class="text-xs text-gray-500 dark:text-gray-400">{{ ruleMessage }}</p>
+    <p v-if="ruleMessage" class="text-xs text-gray-500 dark:text-gray-400" data-test-id="bet-legs-rule-message">{{ ruleMessage }}</p>
   </div>
 </template>
 

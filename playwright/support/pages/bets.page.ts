@@ -8,6 +8,7 @@ import { BetsPaginationComponent } from './shared/bets-pagination.component';
 import { BetsMobileCardsComponent } from './shared/bets-mobile-cards.component';
 import { BetsRowSelectionComponent } from './shared/bets-row-selection.component';
 import { BetsDeleteModalComponent } from './shared/bets-delete-modal.component';
+import { AddBetModalComponent } from './shared/add-bet-modal.component';
 import { BETS_COLUMN_KEYS, BETS_COLUMN_LABELS, BETS_SORTABLE_COLUMN_KEYS } from './shared/bets-columns';
 
 /**
@@ -15,16 +16,17 @@ import { BETS_COLUMN_KEYS, BETS_COLUMN_LABELS, BETS_SORTABLE_COLUMN_KEYS } from 
  * `addBetButton` landmark used by `ui-test-plan-auth-signup.md` to confirm
  * signup navigation) — extended over several test plans to cover the
  * summary stats bar, filters panel, table controls bar, desktop table,
- * pagination, mobile card view, row selection/bulk actions, and the Delete
- * confirmation modal. As that coverage grew this file split into composed
- * shared component classes (`support/pages/shared/bets-*.component.ts`) per
- * playwright-ui-test-generation.md §2/§3's composition convention, rather
- * than continuing to hold every locator directly — `BetsPage` itself now
- * only keeps the page-level landmarks (`addBetButton`, `fetchError`) and the
- * navigation-load helper, delegating everything else to its composed
- * components. Add/Edit Bet remain out of scope — see
- * ui-test-plan-bets-row-selection-bulk-actions.md's "Out of Scope" section
- * for the future plans that will extend this page object further.
+ * pagination, mobile card view, row selection/bulk actions, the Delete
+ * confirmation modal, and (this plan) the Add Bet modal. As that coverage
+ * grew this file split into composed shared component classes
+ * (`support/pages/shared/bets-*.component.ts`, `add-bet-modal.component.ts`)
+ * per playwright-ui-test-generation.md §2/§3's composition convention,
+ * rather than continuing to hold every locator directly — `BetsPage` itself
+ * now only keeps the page-level landmarks (`addBetButton`, `fetchError`) and
+ * the navigation-load helper, delegating everything else to its composed
+ * components. Edit Bet remains out of scope — see
+ * ui-test-plan-add-bet.md's "Out of Scope" section for the future plan that
+ * will extend this page object further.
  */
 export class BetsPage {
   readonly page: Page;
@@ -40,6 +42,7 @@ export class BetsPage {
   readonly mobileCards: BetsMobileCardsComponent;
   readonly rowSelection: BetsRowSelectionComponent;
   readonly deleteModal: BetsDeleteModalComponent;
+  readonly addBetModal: AddBetModalComponent;
 
   static readonly COLUMN_KEYS = BETS_COLUMN_KEYS;
   static readonly SORTABLE_COLUMN_KEYS = BETS_SORTABLE_COLUMN_KEYS;
@@ -76,6 +79,7 @@ export class BetsPage {
     this.mobileCards = new BetsMobileCardsComponent(page);
     this.rowSelection = new BetsRowSelectionComponent(page);
     this.deleteModal = new BetsDeleteModalComponent(page);
+    this.addBetModal = new AddBetModalComponent(page);
   }
 
   /** Lightweight smoke check: URL and one defining locator. */
@@ -88,6 +92,28 @@ export class BetsPage {
   async expectTableControlsAndHeadersCosmeticElements() {
     await this.tableControls.expectCosmeticElements();
     await this.table.expectCosmeticElements();
+  }
+
+  /**
+   * Opens the Add Bet modal and waits for its `onMounted` reference-data
+   * fetches (`GET /api/bookmakers`, `GET /api/bet-types`,
+   * `GET /api/markets`, `GET /api/fixtures` — see AddBetModal.vue) to
+   * resolve before returning. Without this, tests that immediately interact
+   * with the Fixture/Market/Bookmaker dropdowns can race those in-flight
+   * requests and find the option lists not yet populated — mirrors the
+   * register-before-action `waitForResponse` convention used elsewhere
+   * (see playwright-ui-test-generation.md §8a).
+   */
+  async openAddBetModal() {
+    const bookmakersPromise = waitForResponse(this.page, 'GET', '/api/bookmakers');
+    const betTypesPromise = waitForResponse(this.page, 'GET', '/api/bet-types');
+    const marketsPromise = waitForResponse(this.page, 'GET', '/api/markets');
+    const fixturesPromise = waitForResponse(this.page, 'GET', '/api/fixtures');
+
+    await this.addBetButton.click();
+    await this.addBetModal.expectVisible();
+
+    await Promise.all([bookmakersPromise, betTypesPromise, marketsPromise, fixturesPromise]);
   }
 
   async openDeleteModalForRow(index: number) {
