@@ -162,13 +162,13 @@
 
 ## Automation Status
 
-To be automated by extending `support/pages/bets.page.ts` (`BetsPage`) with
+Automated by extending `support/pages/bets.page.ts` (`BetsPage`) with
 locators/helpers for the select-all/row/mobile-card checkboxes, the desktop and
 mobile bulk-actions bars (including their inline error messages), the row/card
 "Edit"/"Delete" buttons, and the Delete confirmation modal (including its inline
 error message) (all exposed via the new `data-test-id` attributes added to
 `BetsView.vue` specifically for this plan — see **Elements Under Test** above),
-composed by one new smoke spec (Scenarios 1–2) and one new functional spec
+composed by one smoke spec (Scenarios 1–2) and one functional spec
 (Scenarios 3–19).
 
 All three error paths in scope for this plan (missing Cash Out Value, failed
@@ -196,27 +196,33 @@ is removed from the table immediately via the UI, not via cleanup. Scenarios 18�
 (`page.route(...)`) to force the relevant API call to fail, rather than any
 backend-side fault injection.
 
+Every `test.beforeEach`/mobile-viewport `page.reload()` in both spec files uses
+the shared `BetsPage.expectBetsLoaded(page, action)` static helper (added during
+self-heal of this plan's initial run) to wait for the resulting
+`GET /api/bets` response before any selection-control interaction, avoiding a
+race where `paginatedBets` is still empty when a checkbox is clicked.
+
 | Scenario | Status | Spec file |
 | --- | --- | --- |
-| 1 | ❌ Not Automated | *(to be created)* |
-| 2 | ❌ Not Automated | *(to be created)* |
-| 3 | ❌ Not Automated | *(to be created)* |
-| 4 | ❌ Not Automated | *(to be created)* |
-| 5 | ❌ Not Automated | *(to be created)* |
-| 6 | ❌ Not Automated | *(to be created)* |
-| 7 | ❌ Not Automated | *(to be created)* |
-| 8 | ❌ Not Automated | *(to be created)* |
-| 9 | ❌ Not Automated | *(to be created)* |
-| 10 | ❌ Not Automated | *(to be created)* |
-| 11 | ❌ Not Automated | *(to be created)* |
-| 12 | ❌ Not Automated | *(to be created)* |
-| 13 | ❌ Not Automated | *(to be created)* |
-| 14 | ❌ Not Automated | *(to be created)* |
-| 15 | ❌ Not Automated | *(to be created)* |
-| 16 | ❌ Not Automated | *(to be created)* |
-| 17 | ❌ Not Automated | *(to be created)* |
-| 18 | ❌ Not Automated | *(to be created)* |
-| 19 | ❌ Not Automated | *(to be created)* |
+| 1 | ✅ Automated | `tests/smoke/bets-row-selection.spec.ts` |
+| 2 | ✅ Automated | `tests/smoke/bets-row-selection.spec.ts` |
+| 3 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 4 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 5 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 6 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 7 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 8 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 9 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 10 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 11 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 12 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 13 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 14 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 15 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 16 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 17 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 18 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
+| 19 | ✅ Automated | `tests/functional/bets-bulk-actions.spec.ts` |
 
 
 ## References
@@ -240,5 +246,5 @@ backend-side fault injection.
   `playwright/tests/functional/top-banner-bet-preferences.spec.ts`,
   `playwright/support/seed-data/bets/index.ts`,
   `playwright/support/functions/bet-seeding.ts`
-- Page Objects: `playwright/support/pages/bets.page.ts` (to be extended)
+- Page Objects: `playwright/support/pages/bets.page.ts` (extended for this plan)
 

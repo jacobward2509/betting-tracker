@@ -76,8 +76,8 @@
   menu, sortable table headers, pagination controls, responsive mobile card view) —
   now covered by `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-table-display.md`.
 - **Row selection & bulk actions** (per-row/select-all checkboxes, bulk result-update
-  bar, per-row "Edit"/"Delete" buttons, Delete confirmation modal) — future dedicated
-  UI test plan for `BetsView.vue`.
+  bar, per-row "Edit"/"Delete" buttons, Delete confirmation modal) — covered by
+  `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-row-selection-bulk-actions.md`.
 - **Add Bet** (`AddBetModal.vue`) — future dedicated UI test plan.
 - **Edit Bet** (`EditBetModal.vue`) — future dedicated UI test plan.
 - **Actual filtering behaviour of the bets table** (i.e. that selecting a filter value
@@ -128,11 +128,16 @@ regardless — see **Out of Scope**).
   attributes for this plan's Elements Under Test)
 - Supporting utils: `apps/web/src/utils/bookmaker.ts`, `apps/web/src/utils/betEnums.ts`,
   `apps/web/src/utils/season.ts`
-- Related UI test plans (shared shell, referenced not re-documented):
+- Related UI test plans:
+  `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-table-display.md`
+  (table controls bar, desktop table, pagination, mobile card view),
+  `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-row-selection-bulk-actions.md`
+  (row selection & bulk actions) (referenced, not re-documented),
   `playwright/docs/test-plans/ui/shell/ui-test-plan-top-banner.md`,
-  `playwright/docs/test-plans/ui/shell/ui-test-plan-tab-nav.md`
+  `playwright/docs/test-plans/ui/shell/ui-test-plan-tab-nav.md` (shared shell,
+  referenced not re-documented)
 - Seeding/cleanup pattern reference: `playwright/tests/functional/top-banner-bet-preferences.spec.ts`
-- Page Objects: `playwright/support/pages/bets.page.ts` (to be extended)
+- Page Objects: `playwright/support/pages/bets.page.ts` (extended by later Bets plans)
 
 
 

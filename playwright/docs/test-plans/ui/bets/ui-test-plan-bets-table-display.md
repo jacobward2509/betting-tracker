@@ -102,7 +102,8 @@
   referenced, not re-documented here.
 - **Row selection & bulk actions** (per-row/select-all checkboxes, bulk
   result-update bar, per-row "Edit"/"Delete" buttons, Delete confirmation
-  modal) — future dedicated UI test plan for `BetsView.vue`.
+  modal) — covered by
+  `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-row-selection-bulk-actions.md`.
 - **Add Bet** (`AddBetModal.vue`) — future dedicated UI test plan.
 - **Edit Bet** (`EditBetModal.vue`) — future dedicated UI test plan.
 - **Persistence of table state across reloads** (rows-per-page, sort
@@ -125,14 +126,14 @@
 
 ## Automation Status
 
-To be automated by extending `support/pages/bets.page.ts` (`BetsPage`) with
+Automated by extending `support/pages/bets.page.ts` (`BetsPage`) with
 locators/helpers for the table controls bar, desktop table (headers, sort
 buttons/indicators, rows), pagination controls, and mobile card view (all
 exposed via the new `data-test-id` attributes added to `BetsView.vue`
 specifically for this plan — see **Elements Under Test** above), composed by
-one new smoke spec and one new functional spec.
+one smoke spec and one functional spec.
 
-Seeding will extend the existing `seedBets()`/`seededBetsFixture()` pattern
+Seeding extends the existing `seedBets()`/`seededBetsFixture()` pattern
 (`support/functions/bet-seeding.ts` / `support/seed-data/bets/index.ts`) with
 a new fixture of 12 bets with distinct stake values (needed to exercise
 2-page pagination at the default page size of 10, and deterministic
@@ -143,18 +144,18 @@ bets specs.
 
 | Scenario | Status | Spec file |
 | --- | --- | --- |
-| 1 | ❌ Not Automated | *(to be created)* |
-| 2 | ❌ Not Automated | *(to be created)* |
-| 3 | ❌ Not Automated | *(to be created)* |
-| 4 | ❌ Not Automated | *(to be created)* |
-| 5 | ❌ Not Automated | *(to be created)* |
-| 6 | ❌ Not Automated | *(to be created)* |
-| 7 | ❌ Not Automated | *(to be created)* |
-| 8 | ❌ Not Automated | *(to be created)* |
-| 9 | ❌ Not Automated | *(to be created)* |
-| 10 | ❌ Not Automated | *(to be created)* |
-| 11 | ❌ Not Automated | *(to be created)* |
-| 12 | ❌ Not Automated | *(to be created)* |
+| 1 | ✅ Automated | `tests/smoke/bets-table-display.spec.ts` |
+| 2 | ✅ Automated | `tests/smoke/bets-table-display.spec.ts` |
+| 3 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 4 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 5 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 6 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 7 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 8 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 9 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 10 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 11 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
+| 12 | ✅ Automated | `tests/functional/bets-table-controls.spec.ts` |
 
 ## References
 
@@ -162,6 +163,8 @@ bets specs.
   `data-test-id` attributes for this plan's Elements Under Test)
 - Related UI test plans: `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-summary-filters.md`
   (summary stats bar & filters panel, referenced not re-documented),
+  `playwright/docs/test-plans/ui/bets/ui-test-plan-bets-row-selection-bulk-actions.md`
+  (row selection & bulk actions, referenced not re-documented),
   `playwright/docs/test-plans/ui/shell/ui-test-plan-top-banner.md`,
   `playwright/docs/test-plans/ui/shell/ui-test-plan-tab-nav.md` (shared shell,
   referenced not re-documented)
@@ -169,6 +172,6 @@ bets specs.
   `playwright/tests/functional/top-banner-bet-preferences.spec.ts`,
   `playwright/support/seed-data/bets/index.ts`,
   `playwright/support/functions/bet-seeding.ts`
-- Page Objects: `playwright/support/pages/bets.page.ts` (to be extended)
+- Page Objects: `playwright/support/pages/bets.page.ts` (extended by later Bets plans)
 
 
