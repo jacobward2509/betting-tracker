@@ -33,18 +33,18 @@ test.describe('Bets Table Controls', () => {
 
   test('Functional - Columns menu hidden by default', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await expect(betsPage.columnsMenu, 'Columns menu should be absent from the DOM').toHaveCount(0);
+    await expect(betsPage.tableControls.columnsMenu, 'Columns menu should be absent from the DOM').toHaveCount(0);
   });
 
   test('Functional - Columns menu appears with all columns checked after clicking the "Columns" toggle button', async ({
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.openColumnsMenu();
+    await betsPage.tableControls.openColumnsMenu();
 
-    await expect(betsPage.columnsMenu, 'Columns menu should be visible').toBeVisible();
+    await expect(betsPage.tableControls.columnsMenu, 'Columns menu should be visible').toBeVisible();
     for (const key of BetsPage.COLUMN_KEYS) {
-      const checkbox = betsPage.columnCheckboxes[key];
+      const checkbox = betsPage.tableControls.columnCheckboxes[key];
       await expect(checkbox, `"${BetsPage.COLUMN_LABELS[key]}" checkbox should be visible`).toBeVisible();
       await expect(
         checkbox.locator('input[type="checkbox"]'),
@@ -59,14 +59,14 @@ test.describe('Bets Table Controls', () => {
 
   test('Functional - Unchecking a column hides its header and cell in the desktop table', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.openColumnsMenu();
+    await betsPage.tableControls.openColumnsMenu();
 
-    await betsPage.uncheckColumn('bookie');
+    await betsPage.tableControls.uncheckColumn('bookie');
 
-    await expect(betsPage.tableHeaders.bookie, '"Bookie" header should no longer be present').toHaveCount(0);
+    await expect(betsPage.table.tableHeaders.bookie, '"Bookie" header should no longer be present').toHaveCount(0);
     for (const key of BetsPage.COLUMN_KEYS.filter((k) => k !== 'bookie')) {
       await expect(
-        betsPage.tableHeaders[key],
+        betsPage.table.tableHeaders[key],
         `"${BetsPage.COLUMN_LABELS[key]}" header should be unaffected`,
       ).toBeVisible();
     }
@@ -76,12 +76,12 @@ test.describe('Bets Table Controls', () => {
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await expect(betsPage.tableRows, 'Should render 10 rows by default').toHaveCount(10);
+    await expect(betsPage.table.tableRows, 'Should render 10 rows by default').toHaveCount(10);
 
-    await betsPage.selectRowsPerPage(5);
+    await betsPage.tableControls.selectRowsPerPage(5);
 
-    await expect(betsPage.tableRows, 'Should render 5 rows after selecting page size 5').toHaveCount(5);
-    await betsPage.expectPageInfo(1, 3);
+    await expect(betsPage.table.tableRows, 'Should render 5 rows after selecting page size 5').toHaveCount(5);
+    await betsPage.pagination.expectPageInfo(1, 3);
   });
 
   test("Functional - Clicking a sortable header's sort button once sorts ascending and updates its indicator", async ({
@@ -89,10 +89,10 @@ test.describe('Bets Table Controls', () => {
   }) => {
     const betsPage = new BetsPage(page);
 
-    await betsPage.toggleSort('stake');
+    await betsPage.table.toggleSort('stake');
 
-    await expect(betsPage.sortIndicators.stake, 'Stake sort indicator should change to "▲"').toHaveText('▲');
-    const firstRowStakeCell = betsPage.tableRows.first().locator('td').nth(6);
+    await expect(betsPage.table.sortIndicators.stake, 'Stake sort indicator should change to "▲"').toHaveText('▲');
+    const firstRowStakeCell = betsPage.table.tableRows.first().locator('td').nth(6);
     await expect(firstRowStakeCell, 'First row should show the lowest stake (£1) when sorted ascending').toHaveText(
       '£ 1',
     );
@@ -102,15 +102,15 @@ test.describe('Bets Table Controls', () => {
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleSort('stake');
-    await expect(betsPage.sortIndicators.stake, 'Stake sort indicator should be "▲" after first click').toHaveText(
+    await betsPage.table.toggleSort('stake');
+    await expect(betsPage.table.sortIndicators.stake, 'Stake sort indicator should be "▲" after first click').toHaveText(
       '▲',
     );
 
-    await betsPage.toggleSort('stake');
+    await betsPage.table.toggleSort('stake');
 
-    await expect(betsPage.sortIndicators.stake, 'Stake sort indicator should change to "▼"').toHaveText('▼');
-    const firstRowStakeCell = betsPage.tableRows.first().locator('td').nth(6);
+    await expect(betsPage.table.sortIndicators.stake, 'Stake sort indicator should change to "▼"').toHaveText('▼');
+    const firstRowStakeCell = betsPage.table.tableRows.first().locator('td').nth(6);
     await expect(
       firstRowStakeCell,
       'First row should show the highest stake (£12) when sorted descending',
@@ -119,34 +119,35 @@ test.describe('Bets Table Controls', () => {
 
   test('Functional - Pagination buttons are disabled at the first page boundary', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.expectPaginationBoundaryState({ atFirstPage: true, atLastPage: false });
+    await betsPage.pagination.expectBoundaryState({ atFirstPage: true, atLastPage: false });
   });
 
   test('Functional - Pagination buttons are disabled at the last page boundary', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.goToLastPage();
+    await betsPage.pagination.goToLastPage();
 
-    await betsPage.expectPageInfo(2, 2);
-    await betsPage.expectPaginationBoundaryState({ atFirstPage: false, atLastPage: true });
+    await betsPage.pagination.expectPageInfo(2, 2);
+    await betsPage.pagination.expectBoundaryState({ atFirstPage: false, atLastPage: true });
   });
 
   test('Functional - "Next"/"Last" pagination buttons navigate forward through pages', async ({ page }) => {
     const betsPage = new BetsPage(page);
 
-    await betsPage.goToNextPage();
+    await betsPage.pagination.goToNextPage();
 
-    await betsPage.expectPageInfo(2, 2);
-    await expect(betsPage.tableRows, 'Second page should show the remaining 2 bets').toHaveCount(2);
+    await betsPage.pagination.expectPageInfo(2, 2);
+    await expect(betsPage.table.tableRows, 'Second page should show the remaining 2 bets').toHaveCount(2);
   });
 
   test('Functional - "Previous"/"First" pagination buttons navigate backward through pages', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.goToNextPage();
-    await betsPage.expectPageInfo(2, 2);
+    await betsPage.pagination.goToNextPage();
+    await betsPage.pagination.expectPageInfo(2, 2);
 
-    await betsPage.goToFirstPage();
+    await betsPage.pagination.goToFirstPage();
 
-    await betsPage.expectPageInfo(1, 2);
-    await expect(betsPage.tableRows, 'First page should show 10 bets again').toHaveCount(10);
+    await betsPage.pagination.expectPageInfo(1, 2);
+    await expect(betsPage.table.tableRows, 'First page should show 10 bets again').toHaveCount(10);
   });
 });
+

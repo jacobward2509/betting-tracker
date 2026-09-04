@@ -46,79 +46,80 @@ test.describe('Bets Filters', () => {
 
   test('Functional - Filter panel body hidden by default', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.expectFiltersPanelHidden();
+    await betsPage.filters.expectPanelHidden();
   });
 
   test('Functional - Filter panel body appears after clicking the "Filters" toggle button', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleFilters();
-    await betsPage.expectFiltersPanelVisible();
+    await betsPage.filters.toggleFilters();
+    await betsPage.filters.expectPanelVisible();
   });
 
   test('Functional - Filter dropdowns show correct default state and options', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleFilters();
+    await betsPage.filters.toggleFilters();
 
     await expect(
-      betsPage.seasonSelect,
+      betsPage.filters.seasonSelect,
       `Season should default to "${currentSeasonLabel()}"`,
     ).toHaveValue(currentSeasonLabel());
     await expect(
-      betsPage.seasonSelect.locator('option'),
+      betsPage.filters.seasonSelect.locator('option'),
       'Season dropdown should only offer the current season (all seeded bets are placed "now")',
     ).toHaveText([currentSeasonLabel()]);
 
-    await expect(betsPage.bookieSelect, 'Bookie should default to "All Bookies"').toHaveValue('');
+    await expect(betsPage.filters.bookieSelect, 'Bookie should default to "All Bookies"').toHaveValue('');
     await expect(
-      betsPage.bookieSelect.locator('option'),
+      betsPage.filters.bookieSelect.locator('option'),
       'Bookie dropdown should offer "All Bookies" plus both seeded bookmakers, alphabetically',
     ).toHaveText(['All Bookies', 'Bet365', 'Sky Bet']);
 
-    await expect(betsPage.stakeTypeSelect, 'Stake Type should default to "All Stake Types"').toHaveValue('');
+    await expect(betsPage.filters.stakeTypeSelect, 'Stake Type should default to "All Stake Types"').toHaveValue('');
     await expect(
-      betsPage.stakeTypeSelect.locator('option'),
+      betsPage.filters.stakeTypeSelect.locator('option'),
       'Stake Type dropdown should offer "All Stake Types" plus both seeded stake types',
     ).toHaveText(['All Stake Types', 'Free', 'Normal']);
 
-    await expect(betsPage.resultSelect, 'Result should default to "All Results"').toHaveValue('');
+    await expect(betsPage.filters.resultSelect, 'Result should default to "All Results"').toHaveValue('');
     await expect(
-      betsPage.resultSelect.locator('option'),
+      betsPage.filters.resultSelect.locator('option'),
       'Result dropdown should offer "All Results" plus both seeded results, in the order they first appear in the seeded bets (Win seeded before Loss)',
     ).toHaveText(['All Results', 'Win', 'Loss']);
 
 
-    await expect(betsPage.fixtureInput, 'Fixture input should be empty by default').toBeEmpty();
-    await expect(betsPage.dateInput, 'Date input should be empty by default').toBeEmpty();
+    await expect(betsPage.filters.fixtureInput, 'Fixture input should be empty by default').toBeEmpty();
+    await expect(betsPage.filters.dateInput, 'Date input should be empty by default').toBeEmpty();
   });
 
   test('Functional - Active-filter badge and "Clear" button appear after setting a filter', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleFilters();
-    await betsPage.expectNoActiveFilterBadge();
+    await betsPage.filters.toggleFilters();
+    await betsPage.filters.expectNoActiveFilterBadge();
 
-    await betsPage.selectBookie('Bet365');
+    await betsPage.filters.selectBookie('Bet365');
 
-    await betsPage.expectActiveFilterBadge(1);
+    await betsPage.filters.expectActiveFilterBadge(1);
   });
 
   test('Functional - "Clear" button resets all filters', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleFilters();
-    await betsPage.selectBookie('Bet365');
-    await betsPage.expectActiveFilterBadge(1);
+    await betsPage.filters.toggleFilters();
+    await betsPage.filters.selectBookie('Bet365');
+    await betsPage.filters.expectActiveFilterBadge(1);
 
-    await betsPage.clearFilters();
+    await betsPage.filters.clearFilters();
 
-    await betsPage.expectNoActiveFilterBadge();
+    await betsPage.filters.expectNoActiveFilterBadge();
     await expect(
-      betsPage.seasonSelect,
+      betsPage.filters.seasonSelect,
       'Season should revert to the current season label',
     ).toHaveValue(currentSeasonLabel());
-    await expect(betsPage.bookieSelect, 'Bookie should revert to "All Bookies"').toHaveValue('');
-    await expect(betsPage.stakeTypeSelect, 'Stake Type should revert to "All Stake Types"').toHaveValue('');
-    await expect(betsPage.resultSelect, 'Result should revert to "All Results"').toHaveValue('');
-    await expect(betsPage.fixtureInput, 'Fixture input should be emptied').toBeEmpty();
-    await expect(betsPage.dateInput, 'Date input should be emptied').toBeEmpty();
+    await expect(betsPage.filters.bookieSelect, 'Bookie should revert to "All Bookies"').toHaveValue('');
+    await expect(betsPage.filters.stakeTypeSelect, 'Stake Type should revert to "All Stake Types"').toHaveValue('');
+    await expect(betsPage.filters.resultSelect, 'Result should revert to "All Results"').toHaveValue('');
+    await expect(betsPage.filters.fixtureInput, 'Fixture input should be emptied').toBeEmpty();
+    await expect(betsPage.filters.dateInput, 'Date input should be emptied').toBeEmpty();
   });
 });
+
 

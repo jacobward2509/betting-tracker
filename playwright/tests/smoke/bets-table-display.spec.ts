@@ -34,8 +34,8 @@ test.describe('Bets Table Display', () => {
   test('Cosmetic - Table controls bar and desktop table render correctly by default', async ({ page }) => {
     const betsPage = new BetsPage(page);
     await betsPage.expectTableControlsAndHeadersCosmeticElements();
-    await betsPage.expectPageInfo(1, 2);
-    await betsPage.expectPaginationBoundaryState({ atFirstPage: true, atLastPage: false });
+    await betsPage.pagination.expectPageInfo(1, 2);
+    await betsPage.pagination.expectBoundaryState({ atFirstPage: true, atLastPage: false });
   });
 
   test('Cosmetic - Mobile card view renders correctly on small viewports, desktop table hidden', async ({
@@ -45,6 +45,7 @@ test.describe('Bets Table Display', () => {
     await BetsPage.expectBetsLoaded(page, () => page.reload());
 
     const betsPage = new BetsPage(page);
-    await betsPage.expectMobileCardViewCosmeticElements(10);
+    await betsPage.mobileCards.expectCosmeticElements(10);
   });
 });
+

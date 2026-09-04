@@ -33,7 +33,7 @@ test.describe('Bets Row Selection', () => {
 
   test('Cosmetic - Desktop selection controls and action buttons render correctly by default', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.expectDesktopSelectionCosmeticElements(3);
+    await betsPage.rowSelection.expectDesktopCosmeticElements(3);
   });
 
   test('Cosmetic - Mobile selection controls and action buttons render correctly by default', async ({ page }) => {
@@ -41,6 +41,7 @@ test.describe('Bets Row Selection', () => {
     await BetsPage.expectBetsLoaded(page, () => page.reload());
 
     const betsPage = new BetsPage(page);
-    await betsPage.expectMobileSelectionCosmeticElements(3);
+    await betsPage.rowSelection.expectMobileCosmeticElements(3);
   });
 });
+

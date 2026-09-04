@@ -33,7 +33,7 @@ test.describe('Bets Summary & Filters', () => {
 
   test('Cosmetic - Summary stats bar renders correctly', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.expectSummaryStatsCosmeticElements({
+    await betsPage.summaryStats.expectCosmeticElements({
       totalBets: '3',
       favouriteBookie: 'Bet365',
       totalProfitLossText: '£ 5.00',
@@ -43,6 +43,7 @@ test.describe('Bets Summary & Filters', () => {
 
   test('Cosmetic - Filters panel renders correctly in its default (collapsed) state', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.expectFiltersCollapsedCosmeticElements();
+    await betsPage.filters.expectCollapsedCosmeticElements();
   });
 });
+

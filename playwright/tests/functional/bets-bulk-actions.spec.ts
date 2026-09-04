@@ -34,9 +34,9 @@ test.describe('Bets Bulk Actions', () => {
 
   test('Functional - Selecting a desktop row checkbox reveals the desktop bulk bar', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleRowCheckbox(0);
+    await betsPage.rowSelection.toggleRowCheckbox(0);
 
-    await betsPage.expectBulkBarDesktopDefaultState(1);
+    await betsPage.rowSelection.expectBulkBarDesktopDefaultState(1);
   });
 
   test('Functional - Selecting a mobile card checkbox reveals the mobile bulk bar', async ({ page }) => {
@@ -44,36 +44,36 @@ test.describe('Bets Bulk Actions', () => {
     await BetsPage.expectBetsLoaded(page, () => page.reload());
 
     const betsPage = new BetsPage(page);
-    await betsPage.toggleMobileCardCheckbox(0);
+    await betsPage.rowSelection.toggleMobileCardCheckbox(0);
 
-    await betsPage.expectBulkBarMobileDefaultState(1);
+    await betsPage.rowSelection.expectBulkBarMobileDefaultState(1);
   });
 
   test('Functional - Select-all checkbox selects every row on the current page (desktop)', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleSelectAll();
+    await betsPage.rowSelection.toggleSelectAll();
 
-    await expect(betsPage.selectAllCheckbox, 'Select-all checkbox should be checked').toBeChecked();
+    await expect(betsPage.rowSelection.selectAllCheckbox, 'Select-all checkbox should be checked').toBeChecked();
     for (let i = 0; i < 3; i++) {
-      await expect(betsPage.rowCheckboxes.nth(i), `Row ${i} checkbox should be checked`).toBeChecked();
+      await expect(betsPage.rowSelection.rowCheckboxes.nth(i), `Row ${i} checkbox should be checked`).toBeChecked();
     }
-    await betsPage.expectBulkBarDesktopDefaultState(3);
+    await betsPage.rowSelection.expectBulkBarDesktopDefaultState(3);
   });
 
   test('Functional - Select-all checkbox becomes indeterminate when only some rows on the page are selected', async ({
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleSelectAll();
-    await expect(betsPage.selectAllCheckbox, 'Select-all checkbox should be checked initially').toBeChecked();
+    await betsPage.rowSelection.toggleSelectAll();
+    await expect(betsPage.rowSelection.selectAllCheckbox, 'Select-all checkbox should be checked initially').toBeChecked();
 
-    await betsPage.toggleRowCheckbox(0);
+    await betsPage.rowSelection.toggleRowCheckbox(0);
 
-    await expect(betsPage.selectAllCheckbox, 'Select-all checkbox should no longer be checked').not.toBeChecked();
-    const isIndeterminate = await betsPage.selectAllCheckbox.evaluate((el: HTMLInputElement) => el.indeterminate);
+    await expect(betsPage.rowSelection.selectAllCheckbox, 'Select-all checkbox should no longer be checked').not.toBeChecked();
+    const isIndeterminate = await betsPage.rowSelection.selectAllCheckbox.evaluate((el: HTMLInputElement) => el.indeterminate);
     expect(isIndeterminate, 'Select-all checkbox should be indeterminate').toBe(true);
     await expect(
-      betsPage.bulkSelectedCountDesktop,
+      betsPage.rowSelection.bulkSelectedCountDesktop,
       'Selected count should decrease by 1 to "2 selected"',
     ).toHaveText('2 selected');
   });
@@ -82,32 +82,32 @@ test.describe('Bets Bulk Actions', () => {
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleSelectAll();
-    await expect(betsPage.selectAllCheckbox, 'Select-all checkbox should be checked initially').toBeChecked();
+    await betsPage.rowSelection.toggleSelectAll();
+    await expect(betsPage.rowSelection.selectAllCheckbox, 'Select-all checkbox should be checked initially').toBeChecked();
 
-    await betsPage.toggleSelectAll();
+    await betsPage.rowSelection.toggleSelectAll();
 
-    await expect(betsPage.selectAllCheckbox, 'Select-all checkbox should become unchecked').not.toBeChecked();
-    const isIndeterminate = await betsPage.selectAllCheckbox.evaluate((el: HTMLInputElement) => el.indeterminate);
+    await expect(betsPage.rowSelection.selectAllCheckbox, 'Select-all checkbox should become unchecked').not.toBeChecked();
+    const isIndeterminate = await betsPage.rowSelection.selectAllCheckbox.evaluate((el: HTMLInputElement) => el.indeterminate);
     expect(isIndeterminate, 'Select-all checkbox should not be indeterminate').toBe(false);
     for (let i = 0; i < 3; i++) {
-      await expect(betsPage.rowCheckboxes.nth(i), `Row ${i} checkbox should be unchecked`).not.toBeChecked();
+      await expect(betsPage.rowSelection.rowCheckboxes.nth(i), `Row ${i} checkbox should be unchecked`).not.toBeChecked();
     }
-    await expect(betsPage.bulkBarDesktop, 'Desktop bulk bar should disappear').toHaveCount(0);
+    await expect(betsPage.rowSelection.bulkBarDesktop, 'Desktop bulk bar should disappear').toHaveCount(0);
   });
 
   test('Functional - Selecting "Cashed Out" in the bulk Result dropdown reveals the Cash Out Value input (desktop)', async ({
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleRowCheckbox(0);
+    await betsPage.rowSelection.toggleRowCheckbox(0);
 
-    await betsPage.selectBulkResultDesktop('Cashed Out');
+    await betsPage.rowSelection.selectBulkResultDesktop('Cashed Out');
 
-    await expect(betsPage.bulkCashOutInputDesktop, 'Cash Out Value input should become visible').toBeVisible();
-    await expect(betsPage.bulkCashOutInputDesktop, 'Cash Out Value input should be empty').toHaveValue('');
+    await expect(betsPage.rowSelection.bulkCashOutInputDesktop, 'Cash Out Value input should become visible').toBeVisible();
+    await expect(betsPage.rowSelection.bulkCashOutInputDesktop, 'Cash Out Value input should be empty').toHaveValue('');
     await expect(
-      betsPage.bulkCashOutInputDesktop,
+      betsPage.rowSelection.bulkCashOutInputDesktop,
       'Cash Out Value input should have the placeholder "Cash Out Value"',
     ).toHaveAttribute('placeholder', 'Cash Out Value');
   });
@@ -116,13 +116,13 @@ test.describe('Bets Bulk Actions', () => {
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleRowCheckbox(0);
-    await betsPage.selectBulkResultDesktop('Cashed Out');
-    await expect(betsPage.bulkCashOutInputDesktop, 'Cash Out Value input should be visible initially').toBeVisible();
+    await betsPage.rowSelection.toggleRowCheckbox(0);
+    await betsPage.rowSelection.selectBulkResultDesktop('Cashed Out');
+    await expect(betsPage.rowSelection.bulkCashOutInputDesktop, 'Cash Out Value input should be visible initially').toBeVisible();
 
-    await betsPage.selectBulkResultDesktop('Open');
+    await betsPage.rowSelection.selectBulkResultDesktop('Open');
 
-    await expect(betsPage.bulkCashOutInputDesktop, 'Cash Out Value input should be removed from the DOM').toHaveCount(
+    await expect(betsPage.rowSelection.bulkCashOutInputDesktop, 'Cash Out Value input should be removed from the DOM').toHaveCount(
       0,
     );
   });
@@ -131,23 +131,23 @@ test.describe('Bets Bulk Actions', () => {
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleRowCheckbox(0);
-    await betsPage.selectBulkResultDesktop('Cashed Out');
+    await betsPage.rowSelection.toggleRowCheckbox(0);
+    await betsPage.rowSelection.selectBulkResultDesktop('Cashed Out');
 
     let dialogFired = false;
     page.once('dialog', () => {
       dialogFired = true;
     });
 
-    await betsPage.applyBulkResultDesktop();
+    await betsPage.rowSelection.applyBulkResultDesktop();
 
     await expect(
-      betsPage.bulkErrorDesktop,
+      betsPage.rowSelection.bulkErrorDesktop,
       'Inline bulk error should read the Cash Out Value validation message',
     ).toHaveText('Please enter a valid Cash Out value for Cashed Out.');
     expect(dialogFired, 'No native browser dialog should be triggered').toBe(false);
-    await expect(betsPage.bulkBarDesktop, 'Desktop bulk bar should remain visible').toBeVisible();
-    await expect(betsPage.rowCheckboxes.nth(0), 'Selection should remain unchanged').toBeChecked();
+    await expect(betsPage.rowSelection.bulkBarDesktop, 'Desktop bulk bar should remain visible').toBeVisible();
+    await expect(betsPage.rowSelection.rowCheckboxes.nth(0), 'Selection should remain unchanged').toBeChecked();
   });
 
   test('Functional - Applying a bulk "Win" result updates the selected bet and clears selection (desktop)', async ({
@@ -156,58 +156,58 @@ test.describe('Bets Bulk Actions', () => {
     const betsPage = new BetsPage(page);
     // Bet at row 1 (index 1) starts as "Loss" (seededBetsFixture's second bet) — select
     // it and apply "Win" so the result badge change is unambiguous.
-    await betsPage.toggleRowCheckbox(1);
-    await betsPage.selectBulkResultDesktop('Win');
+    await betsPage.rowSelection.toggleRowCheckbox(1);
+    await betsPage.rowSelection.selectBulkResultDesktop('Win');
 
     const bulkResultPromise = waitForResponse(page, 'PATCH', '/api/bets/bulk-result');
-    await betsPage.applyBulkResultDesktop();
+    await betsPage.rowSelection.applyBulkResultDesktop();
     const bulkResultResponse = await bulkResultPromise;
 
     expect(bulkResultResponse.ok(), 'PATCH /api/bets/bulk-result should succeed').toBe(true);
-    await expect(betsPage.bulkBarDesktop, 'Desktop bulk bar should disappear (selection cleared)').toHaveCount(0);
-    await expect(betsPage.rowCheckboxes.nth(1), 'Row 1 checkbox should be unchecked again').not.toBeChecked();
-    await expect(betsPage.tableRows.nth(1), 'Updated row should show "Win"').toContainText('Win');
+    await expect(betsPage.rowSelection.bulkBarDesktop, 'Desktop bulk bar should disappear (selection cleared)').toHaveCount(0);
+    await expect(betsPage.rowSelection.rowCheckboxes.nth(1), 'Row 1 checkbox should be unchecked again').not.toBeChecked();
+    await expect(betsPage.table.tableRows.nth(1), 'Updated row should show "Win"').toContainText('Win');
   });
 
   test('Functional - Applying a bulk "Cashed Out" result with a valid Cash Out Value updates the selected bet (desktop)', async ({
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleRowCheckbox(1);
-    await betsPage.selectBulkResultDesktop('Cashed Out');
-    await betsPage.fillBulkCashOutValueDesktop('12.50');
+    await betsPage.rowSelection.toggleRowCheckbox(1);
+    await betsPage.rowSelection.selectBulkResultDesktop('Cashed Out');
+    await betsPage.rowSelection.fillBulkCashOutValueDesktop('12.50');
 
     const bulkResultPromise = waitForResponse(page, 'PATCH', '/api/bets/bulk-result');
-    await betsPage.applyBulkResultDesktop();
+    await betsPage.rowSelection.applyBulkResultDesktop();
     const bulkResultResponse = await bulkResultPromise;
 
     expect(bulkResultResponse.ok(), 'PATCH /api/bets/bulk-result should succeed').toBe(true);
-    await expect(betsPage.bulkBarDesktop, 'Desktop bulk bar should disappear (selection cleared)').toHaveCount(0);
+    await expect(betsPage.rowSelection.bulkBarDesktop, 'Desktop bulk bar should disappear (selection cleared)').toHaveCount(0);
     await expect(
-      betsPage.tableRows.nth(1),
+      betsPage.table.tableRows.nth(1),
       'Updated row should show the "Cashed Out" result and cash out amount',
     ).toContainText('Cashed Out');
-    await expect(betsPage.tableRows.nth(1)).toContainText('Amount: £12.50');
+    await expect(betsPage.table.tableRows.nth(1)).toContainText('Amount: £12.50');
   });
 
   test('Functional - Applying a bulk result across multiple selected rows updates every selected bet (desktop)', async ({
     page,
   }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleRowCheckbox(0);
-    await betsPage.toggleRowCheckbox(1);
-    await betsPage.selectBulkResultDesktop('Loss');
+    await betsPage.rowSelection.toggleRowCheckbox(0);
+    await betsPage.rowSelection.toggleRowCheckbox(1);
+    await betsPage.rowSelection.selectBulkResultDesktop('Loss');
 
     const bulkResultPromise = waitForResponse(page, 'PATCH', '/api/bets/bulk-result');
-    await betsPage.applyBulkResultDesktop();
+    await betsPage.rowSelection.applyBulkResultDesktop();
     const bulkResultResponse = await bulkResultPromise;
 
     expect(bulkResultResponse.ok(), 'PATCH /api/bets/bulk-result should succeed').toBe(true);
     const requestBody = bulkResultResponse.request().postDataJSON();
     expect(requestBody.ids, 'Request should include both selected bet ids').toHaveLength(2);
-    await expect(betsPage.bulkBarDesktop, 'Desktop bulk bar should disappear (selection cleared)').toHaveCount(0);
-    await expect(betsPage.tableRows.nth(0), 'First updated row should show "Loss"').toContainText('Loss');
-    await expect(betsPage.tableRows.nth(1), 'Second updated row should show "Loss"').toContainText('Loss');
+    await expect(betsPage.rowSelection.bulkBarDesktop, 'Desktop bulk bar should disappear (selection cleared)').toHaveCount(0);
+    await expect(betsPage.table.tableRows.nth(0), 'First updated row should show "Loss"').toContainText('Loss');
+    await expect(betsPage.table.tableRows.nth(1), 'Second updated row should show "Loss"').toContainText('Loss');
   });
 
   test('Functional - Applying a bulk result from the mobile bulk bar updates the selected bet (mobile)', async ({
@@ -217,22 +217,22 @@ test.describe('Bets Bulk Actions', () => {
     await BetsPage.expectBetsLoaded(page, () => page.reload());
 
     const betsPage = new BetsPage(page);
-    await betsPage.toggleMobileCardCheckbox(1);
-    await betsPage.selectBulkResultMobile('Win');
+    await betsPage.rowSelection.toggleMobileCardCheckbox(1);
+    await betsPage.rowSelection.selectBulkResultMobile('Win');
 
     const bulkResultPromise = waitForResponse(page, 'PATCH', '/api/bets/bulk-result');
-    await betsPage.applyBulkResultMobile();
+    await betsPage.rowSelection.applyBulkResultMobile();
     const bulkResultResponse = await bulkResultPromise;
 
     expect(bulkResultResponse.ok(), 'PATCH /api/bets/bulk-result should succeed').toBe(true);
-    await expect(betsPage.bulkBarMobile, 'Mobile bulk bar should disappear (selection cleared)').toHaveCount(0);
-    await expect(betsPage.mobileCards.nth(1), 'Updated mobile card should show "Win"').toContainText('Win');
+    await expect(betsPage.rowSelection.bulkBarMobile, 'Mobile bulk bar should disappear (selection cleared)').toHaveCount(0);
+    await expect(betsPage.mobileCards.mobileCards.nth(1), 'Updated mobile card should show "Win"').toContainText('Win');
   });
 
   test('Functional - "Clear" button resets selection without applying any change', async ({ page }) => {
     const betsPage = new BetsPage(page);
-    await betsPage.toggleRowCheckbox(0);
-    await betsPage.selectBulkResultDesktop('Win');
+    await betsPage.rowSelection.toggleRowCheckbox(0);
+    await betsPage.rowSelection.selectBulkResultDesktop('Win');
 
     let bulkRequestSent = false;
     page.on('request', (req) => {
@@ -241,11 +241,11 @@ test.describe('Bets Bulk Actions', () => {
       }
     });
 
-    await betsPage.clearBulkSelectionDesktop();
+    await betsPage.rowSelection.clearBulkSelectionDesktop();
 
     expect(bulkRequestSent, 'No PATCH /api/bets/bulk-result request should be sent').toBe(false);
-    await expect(betsPage.bulkBarDesktop, 'Desktop bulk bar should disappear').toHaveCount(0);
-    await expect(betsPage.rowCheckboxes.nth(0), 'Row checkbox should be unchecked').not.toBeChecked();
+    await expect(betsPage.rowSelection.bulkBarDesktop, 'Desktop bulk bar should disappear').toHaveCount(0);
+    await expect(betsPage.rowSelection.rowCheckboxes.nth(0), 'Row checkbox should be unchecked').not.toBeChecked();
   });
 
   test('Functional - Delete confirmation modal opens with the correct bet\'s details and can be dismissed without deleting', async ({
@@ -254,7 +254,7 @@ test.describe('Bets Bulk Actions', () => {
     const betsPage = new BetsPage(page);
     // Read the target row's fixture/description text before opening the modal,
     // so the assertion doesn't hardcode values that could drift from seed data.
-    const fixtureCell = betsPage.tableRows.nth(0).locator('td').nth(2);
+    const fixtureCell = betsPage.table.tableRows.nth(0).locator('td').nth(2);
     const fixtureText = (await fixtureCell.textContent())?.trim() ?? '';
 
     let deleteRequestSent = false;
@@ -265,15 +265,15 @@ test.describe('Bets Bulk Actions', () => {
     });
 
     await betsPage.openDeleteModalForRow(0);
-    await expect(betsPage.deleteModalFixture, 'Fixture line should mention the correct fixture').toHaveText(
+    await expect(betsPage.deleteModal.deleteModalFixture, 'Fixture line should mention the correct fixture').toHaveText(
       `Fixture: ${fixtureText}`,
     );
 
-    await betsPage.cancelDeleteModal();
+    await betsPage.deleteModal.cancel();
 
     expect(deleteRequestSent, 'No DELETE /api/bets/:id request should be sent').toBe(false);
-    await expect(betsPage.deleteModal, 'Delete confirmation modal should be removed from the DOM').toHaveCount(0);
-    await expect(betsPage.tableRows, 'The bet should remain in the table').toHaveCount(3);
+    await expect(betsPage.deleteModal.deleteModal, 'Delete confirmation modal should be removed from the DOM').toHaveCount(0);
+    await expect(betsPage.table.tableRows, 'The bet should remain in the table').toHaveCount(3);
   });
 
   test('Functional - Confirming deletion removes the bet from the table', async ({ page }) => {
@@ -281,14 +281,14 @@ test.describe('Bets Bulk Actions', () => {
     await betsPage.openDeleteModalForRow(0);
 
     const deleteResponsePromise = waitForResponse(page, 'DELETE', '/api/bets/');
-    await betsPage.confirmDelete();
+    await betsPage.deleteModal.confirm();
     const deleteResponse = await deleteResponsePromise;
 
     expect(deleteResponse.ok(), 'DELETE /api/bets/:id should succeed').toBe(true);
-    await expect(betsPage.deleteModal, 'Delete confirmation modal should close').toHaveCount(0);
-    await expect(betsPage.tableRows, 'Row count should decrease by 1').toHaveCount(2);
+    await expect(betsPage.deleteModal.deleteModal, 'Delete confirmation modal should close').toHaveCount(0);
+    await expect(betsPage.table.tableRows, 'Row count should decrease by 1').toHaveCount(2);
     await expect(
-      betsPage.totalCountValue,
+      betsPage.summaryStats.totalCountValue,
       'Total Bets count in the summary stats bar should decrease by 1',
     ).toHaveText('2');
   });
@@ -305,22 +305,22 @@ test.describe('Bets Bulk Actions', () => {
     });
 
     const betsPage = new BetsPage(page);
-    await betsPage.toggleRowCheckbox(0);
-    await betsPage.selectBulkResultDesktop('Win');
+    await betsPage.rowSelection.toggleRowCheckbox(0);
+    await betsPage.rowSelection.selectBulkResultDesktop('Win');
 
     let dialogFired = false;
     page.once('dialog', () => {
       dialogFired = true;
     });
 
-    await betsPage.applyBulkResultDesktop();
+    await betsPage.rowSelection.applyBulkResultDesktop();
 
-    await expect(betsPage.bulkErrorDesktop, 'Inline bulk error should show the returned error message').toHaveText(
+    await expect(betsPage.rowSelection.bulkErrorDesktop, 'Inline bulk error should show the returned error message').toHaveText(
       'Simulated bulk-apply failure',
     );
     expect(dialogFired, 'No native browser dialog should be triggered').toBe(false);
-    await expect(betsPage.bulkBarDesktop, 'Desktop bulk bar should remain visible').toBeVisible();
-    await expect(betsPage.rowCheckboxes.nth(0), 'Selection should be preserved, not cleared').toBeChecked();
+    await expect(betsPage.rowSelection.bulkBarDesktop, 'Desktop bulk bar should remain visible').toBeVisible();
+    await expect(betsPage.rowSelection.rowCheckboxes.nth(0), 'Selection should be preserved, not cleared').toBeChecked();
   });
 
   test('Functional - A failed delete request shows an inline error, not a native dialog, and keeps the modal open', async ({
@@ -346,13 +346,13 @@ test.describe('Bets Bulk Actions', () => {
       dialogFired = true;
     });
 
-    await betsPage.confirmDelete();
+    await betsPage.deleteModal.confirm();
 
-    await expect(betsPage.deleteModalError, 'Inline delete error should read the failure message').toHaveText(
+    await expect(betsPage.deleteModal.deleteModalError, 'Inline delete error should read the failure message').toHaveText(
       'Failed to delete bet. Please try again.',
     );
     expect(dialogFired, 'No native browser dialog should be triggered').toBe(false);
-    await expect(betsPage.deleteModal, 'Delete confirmation modal should remain open').toBeVisible();
-    await expect(betsPage.tableRows, 'The bet should remain in the table').toHaveCount(3);
+    await expect(betsPage.deleteModal.deleteModal, 'Delete confirmation modal should remain open').toBeVisible();
+    await expect(betsPage.table.tableRows, 'The bet should remain in the table').toHaveCount(3);
   });
 });
