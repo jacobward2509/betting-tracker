@@ -475,6 +475,24 @@ export const useBetForm = (options: UseBetFormOptions) => {
   // message on failure, or null when the form is valid. Shared by both
   // Add Bet and Edit Bet's submit handlers.
   const validateBetFields = (): string | null => {
+    if (!date.value) {
+      return "Date is required.";
+    }
+    if (!betType.value) {
+      return "Bet Type is required.";
+    }
+    if (!bookie.value) {
+      return "Bookmaker is required.";
+    }
+    if (!stakeType.value) {
+      return "Stake Type is required.";
+    }
+    if (stakeType.value !== "Normal + Free") {
+      const stakeValue = Number(stake.value);
+      if (!Number.isFinite(stakeValue) || stakeValue < 0) {
+        return "Stake must be a valid number.";
+      }
+    }
     if (result.value === "Cashed Out" && (cashOutValue.value == null || cashOutValue.value < 0)) {
       return "Please enter a valid Cash Out value.";
     }

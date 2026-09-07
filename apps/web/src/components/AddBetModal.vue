@@ -12,7 +12,7 @@
           </button>
         </div>
 
-        <form @submit.prevent="submitBet" class="p-4 space-y-4" data-test-id="add-bet-form">
+        <form @submit.prevent="submitBet" class="p-4 space-y-4" novalidate data-test-id="add-bet-form">
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" data-test-id="add-bet-date-label">Date</label>
             <input
