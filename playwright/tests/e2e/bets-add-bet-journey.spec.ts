@@ -28,9 +28,15 @@ test.describe('Add Bet - End-to-End Journey', () => {
 
   test.beforeEach(async ({ page, request }) => {
     const email = randomSignupEmail();
-    token = await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
+    token = await signUp(page, {
+      name: VALID_NAME,
+      email,
+      password: VALID_PASSWORD,
+    });
     if (token) await seedBets(request, token, seededBetsFixture());
-    await BetsPage.expectBetsLoaded(page, () => page.goto('/bets'));
+    await BetsPage.expectBetsLoaded(page, () => page.goto('/bets'), {
+      waitForAddBetReferenceData: true,
+    });
   });
 
   test.afterEach(async ({ request }) => {
@@ -56,8 +62,12 @@ test.describe('Add Bet - End-to-End Journey', () => {
     await betsPage.openAddBetModal();
     const modal = betsPage.addBetModal;
 
+    const playersPromise = waitForResponse(page, 'GET', '/players');
     await modal.fixtureSelect.selectOption({ index: 1 });
     await modal.marketSelect.selectOption({ index: 1 });
+    await playersPromise;
+    await modal.playerSelect.selectOption({ index: 1 });
+    await modal.selectionLineSelect.selectOption({ index: 1 });
     // "Bet365" is a single-word bookmaker token, so formatBookmakerLabel()
     // (apps/web/src/utils/bookmaker.ts) renders it unchanged — avoids any
     // ambiguity between the dropdown's raw enum value and the table's
@@ -73,7 +83,10 @@ test.describe('Add Bet - End-to-End Journey', () => {
     await modal.submit();
     await betPostPromise;
     await modal.addAnotherNoButton.click();
-    await expect(modal.modal, 'Modal should close after declining "Add another?"').toHaveCount(0);
+    await expect(
+      modal.modal,
+      'Modal should close after declining "Add another?"',
+    ).toHaveCount(0);
 
     await expect(
       betsPage.table.tableRows,
@@ -81,9 +94,18 @@ test.describe('Add Bet - End-to-End Journey', () => {
     ).toHaveCount(rowCountBefore + 1);
 
     const newRow = betsPage.table.tableRows.first();
-    await expect(newRow, 'New row should show the submitted stake').toContainText('£ 20');
-    await expect(newRow, 'New row should show the submitted bookmaker').toContainText('Bet365');
-    await expect(newRow, 'New row should show the default "Open" result').toContainText('Open');
+    await expect(
+      newRow,
+      'New row should show the submitted stake',
+    ).toContainText('£ 20');
+    await expect(
+      newRow,
+      'New row should show the submitted bookmaker',
+    ).toContainText('Bet365');
+    await expect(
+      newRow,
+      'New row should show the default "Open" result',
+    ).toContainText('Open');
 
     await expect(
       betsPage.summaryStats.totalCountValue,
@@ -103,8 +125,12 @@ test.describe('Add Bet - End-to-End Journey', () => {
     await betsPage.openAddBetModal();
     const modal = betsPage.addBetModal;
 
+    const playersPromise = waitForResponse(page, 'GET', '/players');
     await modal.fixtureSelect.selectOption({ index: 1 });
     await modal.marketSelect.selectOption({ index: 1 });
+    await playersPromise;
+    await modal.playerSelect.selectOption({ index: 1 });
+    await modal.selectionLineSelect.selectOption({ index: 1 });
     // "SkyBet" is one of the two bookmakers already present in
     // seededBetsFixture() (support/seed-data/bets/index.ts), so selecting it
     // as the filter's target value below is guaranteed to already be an
@@ -116,21 +142,26 @@ test.describe('Add Bet - End-to-End Journey', () => {
     await modal.submit();
     await betPostPromise;
     await modal.addAnotherNoButton.click();
-    await expect(modal.modal, 'Modal should close after declining "Add another?"').toHaveCount(0);
+    await expect(
+      modal.modal,
+      'Modal should close after declining "Add another?"',
+    ).toHaveCount(0);
 
     await betsPage.filters.toggleFilters();
     await betsPage.filters.selectBookie('SkyBet');
+    await betsPage.filters.selectResult('Open');
 
     await expect(
       betsPage.table.tableRows,
-      'The new bet\'s row should remain visible when filtering by its own Bookie value',
-    ).toHaveCount(2); // the new bet + the one pre-seeded SkyBet bet.
+      "The new bet's row should remain visible when filtering by its own Bookie value",
+    ).toHaveCount(1); // the new bet + the one pre-seeded SkyBet bet.
 
+    await betsPage.filters.clearFilters();
     await betsPage.filters.selectBookie('Bet365');
 
     await expect(
       betsPage.table.tableRows,
-      'The new bet\'s row should no longer be present when filtering by a different Bookie value',
+      "The new bet's row should no longer be present when filtering by a different Bookie value",
     ).toHaveCount(2); // the two pre-seeded Bet365 bets only.
   });
 });

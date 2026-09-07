@@ -21,7 +21,9 @@ test.describe('Add Bet Modal', () => {
   test.beforeEach(async ({ page }) => {
     const email = randomSignupEmail();
     token = await signUp(page, { name: VALID_NAME, email, password: VALID_PASSWORD });
-    await BetsPage.expectBetsLoaded(page, () => page.goto('/bets'));
+    await BetsPage.expectBetsLoaded(page, () => page.goto('/bets'), {
+      waitForAddBetReferenceData: true,
+    });
   });
 
   test.afterEach(async ({ request }) => {

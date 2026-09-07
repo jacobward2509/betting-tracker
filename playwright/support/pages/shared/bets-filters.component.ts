@@ -47,26 +47,50 @@ export class BetsFiltersComponent {
     await this.bookieSelect.selectOption(bookmaker);
   }
 
+  async selectResult(result: string) {
+    await this.resultSelect.selectOption(result);
+  }
+
   /** Cosmetic check for the filters panel collapsed by default (no active filters). */
   async expectCollapsedCosmeticElements() {
-    await expect(this.filtersToggleButton, 'Filters toggle button should be visible').toBeVisible();
-    await expect(this.filtersToggleButton, 'Filters toggle button should read "▶Filters"').toHaveText(
-      '▶Filters',
-    );
-    await expect(this.filtersActiveBadge, 'Active-filter badge should be absent by default').toHaveCount(0);
-    await expect(this.filtersClearButton, 'Clear button should be absent by default').toHaveCount(0);
-    await expect(this.filtersPanelBody, 'Filter panel body should be absent from the DOM by default').toHaveCount(0);
+    await expect(
+      this.filtersToggleButton,
+      'Filters toggle button should be visible',
+    ).toBeVisible();
+    await expect(
+      this.filtersToggleButton,
+      'Filters toggle button should read "▶Filters"',
+    ).toHaveText('▶Filters');
+    await expect(
+      this.filtersActiveBadge,
+      'Active-filter badge should be absent by default',
+    ).toHaveCount(0);
+    await expect(
+      this.filtersClearButton,
+      'Clear button should be absent by default',
+    ).toHaveCount(0);
+    await expect(
+      this.filtersPanelBody,
+      'Filter panel body should be absent from the DOM by default',
+    ).toHaveCount(0);
   }
 
   async expectPanelHidden() {
-    await expect(this.filtersPanelBody, 'Filter panel body should be absent from the DOM').toHaveCount(0);
+    await expect(
+      this.filtersPanelBody,
+      'Filter panel body should be absent from the DOM',
+    ).toHaveCount(0);
   }
 
   async expectPanelVisible() {
-    await expect(this.filtersPanelBody, 'Filter panel body should be visible').toBeVisible();
-    await expect(this.filtersToggleButton, 'Filters toggle button should read "▼Filters"').toHaveText(
-      '▼Filters',
-    );
+    await expect(
+      this.filtersPanelBody,
+      'Filter panel body should be visible',
+    ).toBeVisible();
+    await expect(
+      this.filtersToggleButton,
+      'Filters toggle button should read "▼Filters"',
+    ).toHaveText('▼Filters');
     for (const locator of [
       this.seasonSelect,
       this.fixtureInput,
@@ -80,14 +104,24 @@ export class BetsFiltersComponent {
   }
 
   async expectActiveFilterBadge(count: number) {
-    await expect(this.filtersActiveBadge, `Active-filter badge should show "${count} active"`).toHaveText(
-      `${count} active`,
-    );
-    await expect(this.filtersClearButton, 'Clear button should be visible').toBeVisible();
+    await expect(
+      this.filtersActiveBadge,
+      `Active-filter badge should show "${count} active"`,
+    ).toHaveText(`${count} active`);
+    await expect(
+      this.filtersClearButton,
+      'Clear button should be visible',
+    ).toBeVisible();
   }
 
   async expectNoActiveFilterBadge() {
-    await expect(this.filtersActiveBadge, 'Active-filter badge should be absent').toHaveCount(0);
-    await expect(this.filtersClearButton, 'Clear button should be absent').toHaveCount(0);
+    await expect(
+      this.filtersActiveBadge,
+      'Active-filter badge should be absent',
+    ).toHaveCount(0);
+    await expect(
+      this.filtersClearButton,
+      'Clear button should be absent',
+    ).toHaveCount(0);
   }
 }

@@ -58,11 +58,31 @@ export class BetsPage {
    * selection state. Must be used any time a test navigates to/reloads
    * `/bets` before interacting with row/select-all checkboxes or the bulk
    * actions bar.
+   *
+   * `AddBetModal.vue` is rendered unconditionally alongside `BetsView`
+   * (no `v-if`), so its `onMounted` reference-data fetches (`GET
+   * /api/bookmakers`, `/api/bet-types`, `/api/markets`, `/api/fixtures`)
+   * fire once, on this same navigation/reload — not when the modal is
+   * later opened. Pass `waitForAddBetReferenceData: true` for any test that
+   * will call `openAddBetModal()`, so those requests are awaited here,
+   * where they actually happen, rather than being raced later.
    */
-  static async expectBetsLoaded(page: Page, action: () => Promise<unknown>): Promise<void> {
+  static async expectBetsLoaded(
+    page: Page,
+    action: () => Promise<unknown>,
+    options?: { waitForAddBetReferenceData?: boolean },
+  ): Promise<void> {
     const betsResponsePromise = waitForResponse(page, 'GET', '/api/bets');
+    const addBetReferenceDataPromises = options?.waitForAddBetReferenceData
+      ? [
+          waitForResponse(page, 'GET', '/api/bookmakers'),
+          waitForResponse(page, 'GET', '/api/bet-types'),
+          waitForResponse(page, 'GET', '/api/markets'),
+          waitForResponse(page, 'GET', '/api/fixtures'),
+        ]
+      : [];
     await action();
-    await betsResponsePromise;
+    await Promise.all([betsResponsePromise, ...addBetReferenceDataPromises]);
   }
 
   constructor(page: Page) {
@@ -95,25 +115,18 @@ export class BetsPage {
   }
 
   /**
-   * Opens the Add Bet modal and waits for its `onMounted` reference-data
-   * fetches (`GET /api/bookmakers`, `GET /api/bet-types`,
-   * `GET /api/markets`, `GET /api/fixtures` — see AddBetModal.vue) to
-   * resolve before returning. Without this, tests that immediately interact
-   * with the Fixture/Market/Bookmaker dropdowns can race those in-flight
-   * requests and find the option lists not yet populated — mirrors the
-   * register-before-action `waitForResponse` convention used elsewhere
-   * (see playwright-ui-test-generation.md §8a).
+   * Opens the Add Bet modal. `AddBetModal.vue`'s reference-data fetches
+   * (`GET /api/bookmakers`, `/api/bet-types`, `/api/markets`,
+   * `/api/fixtures`) run once, on the page's initial mount — not here on
+   * click — since the modal component is always present in the DOM (only
+   * its content is toggled via `v-if="show"`). Callers that need the
+   * Fixture/Market/Bookmaker dropdowns populated must await those requests
+   * up front via `expectBetsLoaded(page, action, { waitForAddBetReferenceData: true })`
+   * during navigation, not here.
    */
   async openAddBetModal() {
-    const bookmakersPromise = waitForResponse(this.page, 'GET', '/api/bookmakers');
-    const betTypesPromise = waitForResponse(this.page, 'GET', '/api/bet-types');
-    const marketsPromise = waitForResponse(this.page, 'GET', '/api/markets');
-    const fixturesPromise = waitForResponse(this.page, 'GET', '/api/fixtures');
-
     await this.addBetButton.click();
     await this.addBetModal.expectVisible();
-
-    await Promise.all([bookmakersPromise, betTypesPromise, marketsPromise, fixturesPromise]);
   }
 
   async openDeleteModalForRow(index: number) {
