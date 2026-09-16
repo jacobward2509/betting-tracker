@@ -1,14 +1,8 @@
 // Human-readable labels for the League enum values returned by the API
-// (see apps/api/prisma/schema.prisma). PREMIER_LEAGUE through
-// CHAMPIONS_LEAGUE are the leagues we actively fetch/cache data for;
-// EFL_CUP, FA_CUP, EUROPA_LEAGUE, and CONFERENCE_LEAGUE remain valid values
-// in the underlying Postgres enum (for any historical Bet/Fixture rows
-// already tagged with them, and for the Fixture dropdown's league-grouping
-// in AddBetModal/EditBetModal/BetLegsEditor) even though they're no longer
-// actively fetched going forward (see the exclusion note on
-// LEAGUE_SPORTSDB_IDS in apps/api/src/services/thesportsdb.ts) — kept here
-// so any of those older leagues still get a friendly label instead of
-// falling back to the raw enum value.
+// (see apps/api/prisma/schema.prisma). All 11 values are actively
+// fetched/cached (see LEAGUE_SPORTSDB_IDS in
+// apps/api/src/services/thesportsdb.ts) and used for the Fixture dropdown's
+// league-grouping in AddBetModal/EditBetModal/BetLegsEditor.
 const LEAGUE_LABELS: Record<string, string> = {
   PREMIER_LEAGUE: "Premier League",
   CHAMPIONSHIP: "Championship",

@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+  <head>
+    <title>CESAPI v2 — OpenAPI Preview</title>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        margin: 0;
+        font-family: sans-serif;
+      }
+      #picker {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: #1f2937;
+        color: #fff;
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      #picker label {
+        font-size: 13px;
+      }
+      #picker select {
+        font-size: 14px;
+        padding: 4px 8px;
+      }
+      #redoc-container {
+        margin-top: 44px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="picker">
+      <label for="spec">Spec:</label>
+      <select id="spec">
+        <option value="auth.yaml">auth</option>
+        <option value="bets.yaml">bets</option>
+        <option value="fixtures.yaml">fixtures</option>
+        <option value="user-config.yaml">user-config</option>
+      </select>
+    </div>
+    <div id="redoc-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js"></script>
+    <script>
+      function render(spec) {
+        document.getElementById('redoc-container').innerHTML = '';
+        Redoc.init(spec, {}, document.getElementById('redoc-container'));
+        history.replaceState(null, '', '?spec=' + encodeURIComponent(spec));
+      }
+      const params = new URLSearchParams(location.search);
+      const initial = params.get('spec') || 'auth.yaml';
+      document.getElementById('spec').value = initial;
+      render(initial);
+      document
+        .getElementById('spec')
+        .addEventListener('change', (e) => render(e.target.value));
+    </script>
+  </body>
+</html>

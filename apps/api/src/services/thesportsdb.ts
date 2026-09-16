@@ -101,23 +101,11 @@ const rateLimitedFetch = async (url: string, init?: RequestInit): Promise<Respon
 
 // Competition IDs resolved via TheSportsDB's search_all_leagues.php /
 // lookupleague.php endpoints. These are stable per-competition identifiers
-// on TheSportsDB and don't change over time.
-//
-// Intentionally excludes EFL_CUP, FA_CUP, EUROPA_LEAGUE, and
-// CONFERENCE_LEAGUE even though they remain valid values in the Postgres
-// League enum (see apps/api/prisma/schema.prisma) — those competitions pull
-// in a huge number of small/non-league or foreign clubs with little to no
-// betting relevance (e.g. FA_CUP alone drags in hundreds of English
-// non-league sides, EUROPA_LEAGUE/CONFERENCE_LEAGUE drag in obscure clubs
-// across dozens of countries), which was bloating the Player/Fixture cache
-// with irrelevant data and burning API calls for no practical benefit.
-// Leaving the enum values in place (rather than migrating them out of
-// Postgres) means any historical Bet/Fixture rows already tagged with one
-// of these leagues are left completely untouched — this is purely an
-// "we no longer fetch new data for these" change, not a data-model change.
-// Using Partial here (rather than Record<League, string>) is what lets us
-// omit these 4 keys while keeping the type checker honest about the rest.
-export const LEAGUE_SPORTSDB_IDS: Partial<Record<League, string>> = {
+// on TheSportsDB and don't change over time. Covers every value in the
+// Postgres League enum (see apps/api/prisma/schema.prisma) — using
+// Record<League, string> rather than Partial lets the type checker catch
+// any future enum value that's missing an ID here.
+export const LEAGUE_SPORTSDB_IDS: Record<League, string> = {
   PREMIER_LEAGUE: '4328',
   CHAMPIONSHIP: '4329',
   LA_LIGA: '4335',
@@ -125,12 +113,15 @@ export const LEAGUE_SPORTSDB_IDS: Partial<Record<League, string>> = {
   LIGUE_1: '4334',
   SERIE_A: '4332',
   CHAMPIONS_LEAGUE: '4480',
+  EFL_CUP: '4570',
+  FA_CUP: '4482',
+  EUROPA_LEAGUE: '4481',
+  CONFERENCE_LEAGUE: '5071',
 };
 
-// The subset of the League enum we actually fetch/cache fixtures and
-// rosters for — see the exclusion note on LEAGUE_SPORTSDB_IDS above. Derived
-// from its keys so there is exactly one place (that object) that defines
-// "which leagues are tracked."
+// Every League enum value — derived from LEAGUE_SPORTSDB_IDS's keys so
+// there is exactly one place (that object) that defines "which leagues are
+// tracked."
 export const TRACKED_LEAGUES = Object.keys(LEAGUE_SPORTSDB_IDS) as League[];
 
 

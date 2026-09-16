@@ -6,10 +6,9 @@ import { fetchAllTeamsForLeague, fetchPlayersForTeam, isSuspectedPlayerTruncatio
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 // One-off/occasional bulk backfill: walks every tracked league (see
-// TRACKED_LEAGUES / the exclusion note on LEAGUE_SPORTSDB_IDS in
-// thesportsdb.ts — EFL_CUP, FA_CUP, EUROPA_LEAGUE, and CONFERENCE_LEAGUE are
-// deliberately excluded), fetches every team in that league, then fetches
-// and caches every team's full roster. Only useful while a Premium/Business
+// TRACKED_LEAGUES / LEAGUE_SPORTSDB_IDS in thesportsdb.ts), fetches every
+// team in that league, then fetches and caches every team's full roster.
+// Only useful while a Premium/Business
 // TheSportsDB key is configured (THESPORTSDB_API_KEY in apps/api/.env) — on
 // the free tier, list/teams and lookup_all_players.php both silently cap
 // out at 10 results per call, so running this against a free key would only
